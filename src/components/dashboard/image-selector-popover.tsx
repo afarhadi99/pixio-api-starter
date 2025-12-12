@@ -90,7 +90,7 @@ export function ImageSelectorPopover({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between glass-input bg-white/5 border-white/15 hover:bg-white/10 text-foreground/80"
+          className="w-1/2 justify-between glass-input bg-white/5 border-white/15 hover:bg-white/10 text-foreground/80"
           disabled={disabled}
           title={selectedLabel ?? triggerText}
         >

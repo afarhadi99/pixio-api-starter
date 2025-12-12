@@ -2,10 +2,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react'; // Added useRef
-import { fetchUserMedia, deleteMedia } from '@/lib/actions/media.actions';
+import { fetchUserMedia, deleteMedia, cancelGeneration } from '@/lib/actions/media.actions';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
-import { ImageIcon, VideoIcon, Loader2, Calendar, Download, Copy, Check, AlertCircle, Trash2, Library, Film } from 'lucide-react';
+import { ImageIcon, VideoIcon, Loader2, Calendar, Download, Copy, Check, AlertCircle, Trash2, Library, Film, XCircle } from 'lucide-react';
 import Image from 'next/image';
 import { toast } from 'sonner';
 import { GeneratedMedia } from '@/types/db_types';
@@ -32,12 +32,12 @@ interface MediaLibraryProps {
 
 export function MediaLibrary({ initialMedia = [] }: MediaLibraryProps) {
   const [media, setMedia] = useState<GeneratedMedia[]>(initialMedia);
-  const [loading, setLoading] = useState(initialMedia.length === 0);
   const [activeTab, setActiveTab] = useState<'all' | MediaType>('all');
   const supabase = createClient();
   const [userId, setUserId] = useState<string | null>(null);
-  const channelRef = useRef<RealtimeChannel | null>(null); // Use ref for channel
+  const channelRef = useRef<RealtimeChannel | null>(null);
 
+  // Get user ID on mount
   useEffect(() => {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -45,24 +45,6 @@ export function MediaLibrary({ initialMedia = [] }: MediaLibraryProps) {
     };
     getUser();
   }, [supabase]);
-
-  useEffect(() => {
-    async function loadInitialMedia() {
-      if (initialMedia.length > 0 || !userId) {
-        if (initialMedia.length > 0 && loading) setLoading(false);
-        return;
-      }
-      console.log("MediaLibrary: No initial media, fetching...");
-      setLoading(true);
-      try {
-        const result = await fetchUserMedia();
-        if (result.success) setMedia(result.media ?? []);
-        else { toast.error(result.error || 'Failed to load media'); setMedia([]); }
-      } catch (error) { console.error('Error loading initial media:', error); toast.error('Failed to load media library'); setMedia([]); }
-      finally { setLoading(false); }
-    }
-    loadInitialMedia();
-  }, [userId, initialMedia.length, loading]); // Adjusted dependencies
 
   useEffect(() => {
     if (!userId || channelRef.current) return; // Don't subscribe if no user or already subscribed
@@ -159,19 +141,69 @@ export function MediaLibrary({ initialMedia = [] }: MediaLibraryProps) {
         </Tabs>
       </div>
 
-      {loading ? (
-        <div className="flex justify-center items-center py-16"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div>
-      ) : (
-        <AnimatePresence>
+      <AnimatePresence>
           {filteredMedia.length === 0 ? (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}>
               <Card className="glass-card border-dashed border-white/20">
-                <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="p-4 mb-4 rounded-full bg-primary/10 border border-primary/20 shadow-sm">
-                    {activeTab === 'image' ? <ImageIcon className="h-10 w-10 text-primary/80" /> : activeTab === 'video' ? <Film className="h-10 w-10 text-primary/80" /> : <Library className="h-10 w-10 text-primary/80" />}
+                <CardContent className="flex flex-col items-center justify-center py-20 text-center px-6">
+                  {/* Icon */}
+                  <div className="p-6 mb-6 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 border-2 border-primary/30 shadow-lg">
+                    {activeTab === 'image' ? <ImageIcon className="h-12 w-12 text-primary" /> : activeTab === 'video' ? <Film className="h-12 w-12 text-primary" /> : <Library className="h-12 w-12 text-primary" />}
                   </div>
-                  <h3 className="text-xl font-medium mb-2 text-foreground">No media yet</h3>
-                  <p className="text-muted-foreground max-w-md">Generate some {activeTab === 'all' ? 'items' : activeTab + 's'} and they will appear here.</p>
+                  
+                  {/* Title */}
+                  <h3 className="text-2xl font-bold mb-3 text-foreground">
+                    {activeTab === 'all' ? 'Your Media Library is Empty' : `No ${activeTab}s Yet`}
+                  </h3>
+                  
+                  {/* Description */}
+                  <p className="text-muted-foreground max-w-md mb-6 text-base">
+                    {activeTab === 'all'
+                      ? 'Start generating AI-powered images and videos. Your creations will appear here.'
+                      : `Generate your first ${activeTab} using one of our AI models above.`
+                    }
+                  </p>
+
+                  {/* Features List */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mb-6 text-left">
+                    <div className="flex items-start gap-2 text-sm">
+                      <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <ImageIcon className="w-3 h-3 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground/90">Krea Flux</p>
+                        <p className="text-xs text-muted-foreground">High-quality images</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start gap-2 text-sm">
+                      <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <ImageIcon className="w-3 h-3 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground/90">Qwen Edit</p>
+                        <p className="text-xs text-muted-foreground">AI image editing</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start gap-2 text-sm">
+                      <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Film className="w-3 h-3 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground/90">Wan 2.2</p>
+                        <p className="text-xs text-muted-foreground">Video transitions</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Call to Action */}
+                  <button
+                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                    className="glass-button bg-gradient-to-r from-primary to-secondary text-white px-6 py-3 rounded-lg font-medium hover:opacity-90 transition-all shadow-md hover:shadow-lg"
+                  >
+                    Start Creating
+                  </button>
                 </CardContent>
               </Card>
             </motion.div>
@@ -184,8 +216,7 @@ export function MediaLibrary({ initialMedia = [] }: MediaLibraryProps) {
               ))}
             </motion.div>
           )}
-        </AnimatePresence>
-      )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -199,6 +230,7 @@ interface MediaCardProps {
 function MediaCard({ item, onDeleted }: MediaCardProps) {
   const [isCopied, setIsCopied] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const formattedDate = new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   const downloadMedia = async (e: React.MouseEvent) => {
@@ -242,10 +274,30 @@ function MediaCard({ item, onDeleted }: MediaCardProps) {
     } catch (error: any) { toast.error(`Error deleting: ${error.message}`); setIsDeleting(false); }
   };
 
+  const handleCancelConfirm = async () => {
+    if (!item.id) { toast.error("Cannot cancel: Missing ID."); return; }
+    setIsCancelling(true);
+    console.log(`Cancelling media generation: ${item.id}`);
+    try {
+      const result = await cancelGeneration(item.id);
+      if (result.success) {
+        toast.success('Generation cancelled');
+        // No need to call onDeleted - Realtime will update the UI
+      } else {
+        toast.error(`Cancel failed: ${result.error}`);
+      }
+    } catch (error: any) {
+      toast.error(`Error cancelling: ${error.message}`);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   const isLoading = item.status === 'pending' || item.status === 'processing';
   const isFailed = item.status === 'failed';
   const isCompleted = item.status === 'completed';
   const showActions = isCompleted || isFailed;
+  const showCancel = isLoading && !isCancelling;
   const isMp4Video = item.media_type === 'video' && item.media_url?.toLowerCase().endsWith('.mp4');
 
   return (
@@ -296,6 +348,19 @@ function MediaCard({ item, onDeleted }: MediaCardProps) {
         <div className="flex items-center justify-between mt-auto border-t border-white/10 pt-2">
           <div className="flex items-center gap-1 text-xs text-muted-foreground"> <Calendar className="h-3 w-3" /> <span>{formattedDate}</span> </div>
           <AnimatePresence>
+            {showCancel && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex gap-1">
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 text-orange-500/70 hover:text-orange-500 hover:bg-orange-500/10" title="Cancel generation" disabled={isCancelling}> {isCancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />} </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent className="glass-card border-orange-500/30">
+                    <AlertDialogHeader> <AlertDialogTitle>Cancel Generation?</AlertDialogTitle> <AlertDialogDescription> This will stop the generation process. Credits will not be refunded. </AlertDialogDescription> </AlertDialogHeader>
+                    <AlertDialogFooter> <AlertDialogCancel disabled={isCancelling}>Keep Running</AlertDialogCancel> <AlertDialogAction onClick={handleCancelConfirm} disabled={isCancelling} className="bg-orange-500 text-white hover:bg-orange-600"> {isCancelling ? "Cancelling..." : "Cancel Generation"} </AlertDialogAction> </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </motion.div>
+            )}
             {showActions && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex gap-1">
                 {isCompleted && item.media_url && ( <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={downloadMedia} title="Download" disabled={isDeleting}> <Download className="h-3.5 w-3.5" /> </Button> )}

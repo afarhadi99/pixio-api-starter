@@ -4,14 +4,21 @@
 import { createClient } from '@/lib/supabase/server';
 import { useCredits } from '@/lib/credits';
 import { revalidatePath } from 'next/cache';
-// Import the service function, NOT the action itself recursively
-import { checkGenerationStatus as checkGenerationStatusService } from '@/lib/services/media.service';
 import { MediaType, CREDIT_COSTS, GenerationResult, GenerationMode } from '@/lib/constants/media';
 // Import the specific Insert type and GeneratedMedia type
 import { Database, GeneratedMedia } from '@/types/db_types';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 // Import only the necessary storage service functions (used by actions below)
 import { listUserFiles as listUserFilesService, deleteFile as deleteFileService } from '@/lib/storage/supabase-storage';
+// Import Pixio API client and models
+import {
+  PIXIO_MODELS,
+  queuePixioRun,
+  cancelPixioRun,
+  createRunRequest,
+  type KreaFluxInputs,
+  type WanFirstLastFrameInputs
+} from '@/lib/pixio-api';
 
 // Define the specific type for insertion, derived from db_types.ts
 type GeneratedMediaInsert = Database['public']['Tables']['generated_media']['Insert'];
@@ -33,20 +40,57 @@ export async function generateMedia(formData: FormData): Promise<{
   }
 
   // --- Read data from FormData ---
-  const prompt = formData.get('prompt') as string;
   const generationMode = formData.get('generationMode') as GenerationMode;
-  const mediaType = formData.get('mediaType') as MediaType; // Actual type being generated
-
-  // Get URLs directly from FormData (sent by client after direct upload/selection)
-  const startImageUrl = formData.get('startImageUrl') as string | null;
-  const endImageUrl = formData.get('endImageUrl') as string | null;
+  
+  // Determine media type based on model category, not generation mode name
+  const mediaType: MediaType = generationMode === 'firstLastFrameVideo' ? 'video' : 'image';
+  // Krea Flux (image mode) → image
+  // Qwen Edit (video mode) → image (it's editing, not generating video)
+  // Wan 2.2 (firstLastFrameVideo mode) → video
 
   // --- Validation ---
-  if (!prompt || !generationMode || !mediaType) {
+  if (!generationMode) {
     return { success: false, error: 'Missing required fields' };
   }
-  if (generationMode === 'firstLastFrameVideo') {
-    // Now just check if the URLs were provided
+
+  // Mode-specific input extraction and validation
+  let prompt = '';
+  let startImageUrl: string | null = null;
+  let endImageUrl: string | null = null;
+  let image1Url: string | null = null;
+  let image2Url: string | null = null;
+  let image3Url: string | null = null;
+  let positivePrompt = '';
+  let negativePrompt = '';
+  let width = 1024;
+  let height = 1024;
+  let videoWidth = 512;
+  let videoHeight = 512;
+  let videoLength = 81;
+
+  if (generationMode === 'image') {
+    // Krea Flux
+    prompt = formData.get('prompt') as string;
+    width = parseInt(formData.get('width') as string) || 1024;
+    height = parseInt(formData.get('height') as string) || 1024;
+    if (!prompt?.trim()) return { success: false, error: 'Missing prompt' };
+  } else if (generationMode === 'video') {
+    // Qwen Edit
+    image1Url = formData.get('image1Url') as string;
+    image2Url = formData.get('image2Url') as string || null;
+    image3Url = formData.get('image3Url') as string || null;
+    positivePrompt = formData.get('positivePrompt') as string || '';
+    negativePrompt = formData.get('negativePrompt') as string || '';
+    if (!image1Url) return { success: false, error: 'Missing image for editing' };
+  } else if (generationMode === 'firstLastFrameVideo') {
+    // Wan 2.2
+    prompt = formData.get('prompt') as string;
+    startImageUrl = formData.get('startImageUrl') as string;
+    endImageUrl = formData.get('endImageUrl') as string;
+    videoWidth = parseInt(formData.get('width') as string) || 512;
+    videoHeight = parseInt(formData.get('height') as string) || 512;
+    videoLength = parseInt(formData.get('length') as string) || 81;
+    if (!prompt?.trim()) return { success: false, error: 'Missing prompt' };
     if (!startImageUrl) return { success: false, error: 'Missing start image URL' };
     if (!endImageUrl) return { success: false, error: 'Missing end image URL' };
   }
@@ -69,17 +113,21 @@ export async function generateMedia(formData: FormData): Promise<{
     // 2. Create initial 'pending' record in DB
     const insertPayload: GeneratedMediaInsert = {
         user_id: user.id,
-        prompt: prompt,
+        prompt: prompt || positivePrompt || 'Image edit', // Use appropriate prompt
         media_type: mediaType,
         credits_used: creditCost,
         status: 'pending',
         media_url: '', // Required by Insert type
         storage_path: '', // Required by Insert type
-        metadata: { generationMode } // Store UI mode
+        metadata: {
+          generationMode,
+          ...(generationMode === 'image' && { width, height }),
+          ...(positivePrompt && { positivePrompt, negativePrompt })
+        }
     };
     if (generationMode === 'firstLastFrameVideo') {
-        insertPayload.start_image_url = startImageUrl; // Store URL from client
-        insertPayload.end_image_url = endImageUrl;     // Store URL from client
+        insertPayload.start_image_url = startImageUrl;
+        insertPayload.end_image_url = endImageUrl;
     }
     const { data: newMediaRecord, error: insertError } = await supabaseAdmin
       .from('generated_media').insert(insertPayload).select('id').single();
@@ -91,33 +139,128 @@ export async function generateMedia(formData: FormData): Promise<{
     const mediaId = newMediaRecord.id;
     console.log(`[Action] Initial media record created with ID: ${mediaId}`);
 
-    // 3. Prepare payload for the Edge Function (includes URLs now)
-    const functionPayload: any = { prompt, mediaType, generationMode, mediaId };
-    if (generationMode === 'firstLastFrameVideo') {
-        functionPayload.startImageUrl = startImageUrl; // Pass URL
-        functionPayload.endImageUrl = endImageUrl;     // Pass URL
+    // 3. Prepare webhook URL for Pixio API callbacks
+    const webhookUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/api/webhooks/pixio`;
+    console.log(`[Action] Using webhook URL: ${webhookUrl}`);
+
+    // 4. Get API key
+    const apiKey = process.env.PIXIO_DEPLOY_API_KEY;
+    if (!apiKey) {
+      console.error('[Action] PIXIO_DEPLOY_API_KEY not configured');
+      return { success: false, error: 'API key not configured' };
     }
 
-    // 4. Start the Supabase Function (Fire and Forget from Action's perspective)
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    supabase.functions.invoke('generate-media-handler', { body: functionPayload })
-    .then(response => { // Log success/failure of INVOCATION only
-      if (response.error) {
-         // Log the invocation error, but DON'T update DB status here
-         console.error(`[Action] Edge Function invocation for ${mediaId} reported an error (status might still be processing):`, response.error);
-      } else {
-         console.log(`[Action] Edge Function invocation for ${mediaId} acknowledged successfully (processing should start).`);
-      }
-    })
-    .catch(error => { // Catch errors in the invoke call itself
-       // Log the invocation error, but DON'T update DB status here
-       console.error(`[Action] Error invoking Edge Function for ${mediaId} (status might still be processing):`, error);
-    });
+    // 5. Select model and call Pixio API based on generation mode
+    let pixioResult;
+    let selectedModel;
 
-    // 5. Revalidate path immediately to show pending state
+    if (generationMode === 'image') {
+      // Use Krea Flux model
+      selectedModel = PIXIO_MODELS.kreaFlux;
+      const inputs: KreaFluxInputs = {
+        text: prompt,
+        width,
+        height
+      };
+      const request = createRunRequest(selectedModel, inputs, {
+        webhook: webhookUrl,
+        webhookIntermediateStatus: false
+      });
+      
+      console.log(`[Action] Calling Pixio API for mediaId: ${mediaId}, model: ${selectedModel.name}`);
+      pixioResult = await queuePixioRun(request, apiKey);
+      
+    } else if (generationMode === 'video') {
+      // Use Qwen Edit model
+      selectedModel = PIXIO_MODELS.qwenEdit;
+      const inputs: import('@/lib/pixio-api').QwenEditInputs = {
+        image1: image1Url!,
+        positive: positivePrompt,
+        negative: negativePrompt,
+        ...(image2Url && { image2: image2Url }),
+        ...(image3Url && { image3: image3Url })
+      };
+      const request = createRunRequest(selectedModel, inputs, {
+        webhook: webhookUrl,
+        webhookIntermediateStatus: false
+      });
+      
+      console.log(`[Action] Calling Pixio API for mediaId: ${mediaId}, model: ${selectedModel.name}`);
+      pixioResult = await queuePixioRun(request, apiKey);
+      
+    } else if (generationMode === 'firstLastFrameVideo') {
+      // Use Wan First/Last Frame model
+      selectedModel = PIXIO_MODELS.wanFirstLastFrame;
+      const inputs: WanFirstLastFrameInputs = {
+        start_image: startImageUrl!,
+        end_image: endImageUrl!,
+        positive: prompt, // Wan uses 'positive' not 'prompt'
+        negative: '',
+        width: videoWidth,
+        height: videoHeight,
+        length: videoLength
+      };
+      const request = createRunRequest(selectedModel, inputs, {
+        webhook: webhookUrl,
+        webhookIntermediateStatus: false
+      });
+      
+      console.log(`[Action] Calling Pixio API for mediaId: ${mediaId}, model: ${selectedModel.name}`);
+      pixioResult = await queuePixioRun(request, apiKey);
+      
+    } else {
+      console.error(`[Action] Unsupported generation mode: ${generationMode}`);
+      return { success: false, error: 'Unsupported generation mode' };
+    }
+
+    // 6. Check Pixio API result
+
+    if (!pixioResult.success || !pixioResult.data) {
+      console.error(`[Action] Pixio API error:`, pixioResult.error);
+      
+      // Update record to failed
+      await supabaseAdmin
+        .from('generated_media')
+        .update({
+          status: 'failed',
+          metadata: {
+            error: pixioResult.error || 'API request failed',
+            failed_at: new Date().toISOString()
+          }
+        })
+        .eq('id', mediaId);
+      
+      return { success: false, error: pixioResult.error || 'API request failed' };
+    }
+
+    const runId = pixioResult.data.run_id;
+
+    console.log(`[Action] Pixio API run started with ID: ${runId} using model: ${selectedModel.name}`);
+
+    // 7. Update record with run_id, model info, and processing status
+    const { error: runIdUpdateError } = await supabaseAdmin
+      .from('generated_media')
+      .update({
+        status: 'processing',
+        metadata: {
+          run_id: runId,
+          generationMode,
+          model_id: selectedModel.id,
+          model_name: selectedModel.name,
+          started_at: new Date().toISOString()
+        }
+      })
+      .eq('id', mediaId);
+
+    if (runIdUpdateError) {
+      console.error(`[Action] Error updating record with run_id:`, runIdUpdateError);
+    }
+
+    // 8. Revalidate path to show processing state
     revalidatePath('/dashboard');
 
-    // 6. Return success (indicates the process was initiated)
+    // 9. Return success (webhook will handle completion)
+    console.log(`[Action] Successfully initiated generation for ${mediaId}`);
     return { success: true, mediaId: mediaId };
 
   } catch (error: any) {
@@ -128,53 +271,118 @@ export async function generateMedia(formData: FormData): Promise<{
 }
 
 /**
- * Checks the status of a media generation task by calling the service function.
+ * Cancels a running media generation
  */
-export async function checkMediaStatus(mediaId: string): Promise<GenerationResult> {
-  if (!mediaId) { return { success: false, error: "Media ID is required", status: 'failed' }; }
-  console.log(`[Action] Polling status check for mediaId: ${mediaId}`);
+export async function cancelGeneration(mediaId: string): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  if (!mediaId) {
+    return { success: false, error: 'Media ID is required' };
+  }
+
+  const supabase = await createClient();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+  if (!user || userError) {
+    return { success: false, error: 'Authentication error' };
+  }
+
+  console.log(`[Action] Cancelling generation for mediaId: ${mediaId}`);
+
   try {
-    // Fetch record to check status and get run_id
+    // Fetch the media record to verify ownership and get run_id
     const { data: mediaRecord, error: fetchError } = await supabaseAdmin
-        .from('generated_media')
-        .select('status, metadata, media_url')
-        .eq('id', mediaId)
-        .single();
+      .from('generated_media')
+      .select('id, user_id, status, metadata')
+      .eq('id', mediaId)
+      .single();
 
-    if (fetchError) { console.error(`[Action] Error fetching media record ${mediaId}:`, fetchError); return { success: false, error: `Record fetch error: ${fetchError.message}`, status: 'processing' }; }
-    if (!mediaRecord) { console.warn(`[Action] Media record ${mediaId} not found during poll.`); return { success: false, error: `Media record not found: ${mediaId}`, status: 'processing' }; }
+    if (fetchError || !mediaRecord) {
+      console.error(`[Action] Error fetching media ${mediaId}:`, fetchError);
+      return { success: false, error: 'Media record not found' };
+    }
 
-    // If already completed or failed in DB, return that status
-    if (mediaRecord.status === 'completed' || mediaRecord.status === 'failed') {
-      console.log(`[Action] Status for ${mediaId} from DB is final: ${mediaRecord.status}`);
-      const metadata = mediaRecord.metadata as any;
-      return { success: mediaRecord.status === 'completed', status: mediaRecord.status, mediaUrl: mediaRecord.media_url || undefined, error: mediaRecord.status === 'failed' ? (metadata?.error || 'Failed') : undefined };
+    // Verify ownership
+    if (mediaRecord.user_id !== user.id) {
+      console.warn(`[Action] User ${user.id} attempted to cancel media ${mediaId} owned by ${mediaRecord.user_id}`);
+      return { success: false, error: 'Permission denied' };
+    }
+
+    // Check if cancellable
+    if (!['pending', 'processing'].includes(mediaRecord.status)) {
+      return { success: false, error: `Cannot cancel ${mediaRecord.status} generation` };
     }
 
     // Get run_id from metadata
     const runId = (mediaRecord.metadata as any)?.run_id;
+    
     if (!runId) {
-      // run_id might not be set yet if function invocation was slightly delayed
-      console.warn(`[Action] run_id not yet found for mediaId ${mediaId}. DB status: ${mediaRecord.status}. Continuing poll...`);
-      return { success: true, status: mediaRecord.status || 'pending' }; // Return current DB status
-    }
+      // No run_id yet, just update status to failed
+      console.log(`[Action] No run_id for ${mediaId}, marking as cancelled locally`);
+      
+      const { error: updateError } = await supabaseAdmin
+        .from('generated_media')
+        .update({
+          status: 'failed',
+          metadata: {
+            ...(mediaRecord.metadata as object || {}),
+            error: 'Cancelled by user',
+            cancelled_at: new Date().toISOString()
+          }
+        })
+        .eq('id', mediaId);
 
-    // Call the *service function* which interacts with ComfyUI API and updates DB/Storage
-    console.log(`[Action] Found run_id ${runId} for mediaId ${mediaId}. Calling service function...`);
-    const serviceResult = await checkGenerationStatusService(mediaId, runId);
+      if (updateError) {
+        console.error('[Action] Error updating cancelled status:', updateError);
+        return { success: false, error: 'Failed to cancel generation' };
+      }
 
-    // Revalidate the dashboard path if the service function marked it as completed/failed
-    // Note: Revalidation might happen frequently if the service returns 'failed' transiently
-    if (serviceResult.status === 'completed' || serviceResult.status === 'failed') {
       revalidatePath('/dashboard');
-      console.log(`[Action] Revalidated /dashboard. Service status: ${serviceResult.status}`);
+      return { success: true };
     }
-    return serviceResult; // Return result from service
+
+    // Call Pixio API to cancel the run using the client
+    console.log(`[Action] Calling Pixio API to cancel run: ${runId}`);
+    
+    const apiKey = process.env.PIXIO_DEPLOY_API_KEY;
+    if (!apiKey) {
+      return { success: false, error: 'API key not configured' };
+    }
+
+    const cancelResult = await cancelPixioRun(runId, apiKey);
+
+    // Note: Even if the cancel API call fails, we still mark it as cancelled locally
+    if (!cancelResult.success) {
+      console.warn(`[Action] Pixio cancel API failed: ${cancelResult.error}, but continuing with local cancellation`);
+    }
+
+    // Update database to cancelled/failed status
+    const { error: updateError } = await supabaseAdmin
+      .from('generated_media')
+      .update({
+        status: 'failed',
+        metadata: {
+          ...(mediaRecord.metadata as object || {}),
+          error: 'Cancelled by user',
+          cancelled_at: new Date().toISOString(),
+          cancel_api_status: cancelResult.success ? 'success' : 'failed'
+        }
+      })
+      .eq('id', mediaId);
+
+    if (updateError) {
+      console.error('[Action] Error updating cancelled status:', updateError);
+      return { success: false, error: 'Failed to update cancellation status' };
+    }
+
+    console.log(`[Action] Successfully cancelled generation ${mediaId}`);
+    revalidatePath('/dashboard');
+    return { success: true };
 
   } catch (error: any) {
-    console.error(`[Action] Error in checkMediaStatus for ${mediaId}:`, error);
-    // Return failed status if the action itself encounters an error
-    return { success: false, error: error.message, status: 'failed' };
+    console.error(`[Action] Error cancelling generation ${mediaId}:`, error);
+    return { success: false, error: error.message };
   }
 }
 

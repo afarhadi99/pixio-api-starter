@@ -17,9 +17,9 @@ Pixio API Starter is a complete boilerplate for building subscription-based SaaS
 This project leverages modern technologies for a performant and developer-friendly experience:
 
 - **Frontend Framework**: [Next.js 15](https://nextjs.org/) with App Router and Server Components
-- **Authentication & Database**: [Supabase](https://supabase.io/)
+- **Authentication & Database**: [Supabase](https://supabase.io/) with Realtime
 - **Payments & Subscriptions**: [Stripe](https://stripe.com/)
-- **AI Generation**: [ComfyUI](https://comfyui.com/) via [Pixio API](https://api.myapps.ai/)
+- **AI Generation**: [ComfyUI](https://comfyui.com/) via [Pixio API](https://api.myapps.ai/) with Webhooks
 - **UI Components**: [Shadcn UI](https://ui.shadcn.com/)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)
 - **Animation**: [Framer Motion](https://www.framer.com/motion/)
@@ -37,13 +37,16 @@ This project leverages modern technologies for a performant and developer-friend
 - ✅ **Credit System**: Flexible credit-based usage for AI features with purchased packs and subscription allocation
 - ✅ **AI Media Generation**: Generate images and videos from text prompts using integrated ComfyUI workflows
 - ✅ **Media Library**: View and manage generated media with status tracking and real-time updates
+- ✅ **Cancel Generation**: Stop running generations with one click
 - ✅ **Responsive Design**: Looks great on all devices
 - ✅ **Dark Mode Support**: Light and dark theme options
 - ✅ **TypeScript**: Type-safe code for better developer experience
 - ✅ **Server Components**: Leverages Next.js 15 server components for improved performance
 - ✅ **Row Level Security**: Secure database access with Supabase RLS
-- ✅ **Supabase Edge Function**: Handles asynchronous AI generation requests and polling
+- ✅ **Webhook Integration**: Receives real-time status updates from Pixio API
+- ✅ **Supabase Realtime**: Live updates for media status and credits without polling
 - ✅ **Supabase Storage**: Stores generated media files securely
+- ✅ **Cancel Generation**: Ability to cancel running generations
 
 </details>
 
@@ -56,10 +59,12 @@ This section guides you through setting up the project locally after forking the
 
 - Node.js 18.0.0 or higher
 - npm, yarn, or pnpm
+- [Supabase CLI](https://supabase.com/docs/guides/cli) installed globally
 - A [Supabase](https://supabase.io/) account
 - A [Stripe](https://stripe.com/) account
 - A [Pixio API](https://api.myapps.ai/) account (for AI generation)
 - [Stripe CLI](https://stripe.com/docs/stripe-cli) (for local webhook testing)
+- [ngrok](https://ngrok.com/) (for exposing local webhooks to Pixio API)
 
 ### 1. Clone and Install
 
@@ -80,83 +85,128 @@ This section guides you through setting up the project locally after forking the
     pnpm install
     ```
 
-### 2. Set up Supabase
+### 2. Set up Local Supabase
 
-You'll set up your database, storage, and three Edge Functions in the Supabase UI.
+This project uses Supabase CLI for local development, making it easy to test everything locally before pushing to production.
 
-1.  **Create a New Project:**
-    *   Go to the [Supabase Dashboard](https://app.supabase.com/).
-    *   Click "New project".
-    *   Fill in the details and create your project.
-    *   Note your project URL and `anon` key from Project Settings > API.
-    *   Generate a new `service_role` key under Project Settings > API > Project API keys (if one isn't already listed).
-2.  **Set up Database Schema:**
-    *   Go to the SQL Editor (`</>`) in your Supabase project dashboard.
-    *   Run the SQL script provided in the [Database Schema Setup](#database-schema-setup) section below. This creates all necessary tables, enums, and the `handle_new_user` trigger.
-3.  **Create Storage Bucket:**
-    *   Go to Storage in your Supabase project dashboard.
-    *   Click "New bucket".
-    *   Name it `generated-media`.
-    *   Choose **Public** or **Private** (the current code expects **Public** for simplicity in displaying media URLs directly).
-    *   Click "Create bucket".
-    *   Go to policies and create a new policy "Give user access to their own top level folder named uid" and allow SELECT, INSERT, UPDATE, DELETE.
-4.  **Create Edge Functions:**
-    *   You need to create three edge functions for this application. These functions work together in a chain to handle the media generation process.
+#### Install Supabase CLI
 
-    *   **(a) generate-media-handler Function:**
-        *   Go to Edge Functions in your Supabase project dashboard.
-        *   Click "New Function".
-        *   Name it `generate-media-handler`.
-        *   Choose a region.
-        *   Click "Create function".
-        *   This function initiates media generation by submitting jobs to the Pixio API.
-        *   Go to the function's settings and add a **Secret** named `COMFY_DEPLOY_API_KEY` with your Pixio API key as the value.
-        *   Copy the code from the `supabase-functions/generate-media-handler.ts` file in your project and paste it into the function editor in the Supabase UI.
-        *   **Important:** Update the `DEPLOYMENT_IDS` object within the function code with your actual Pixio API workflow IDs for different generation types:
-            ```typescript
-            const DEPLOYMENT_IDS = {
-              image: '8f96cb86-5cbb-4ad0-9837-8a79eeb5103a', // Replace with your ID
-              video: 'd07cf1d5-412c-4270-b925-ffd6416abd1c', // Replace with your ID
-              firstLastFrameVideo: '8c463102-0525-4cf1-8535-731fee0f93b4', // Replace with your ID
-            };
-            ```
-        *   Deploy the function.
+If you haven't already:
 
-    *   **(b) poll-status-handler Function:**
-        *   Click "New Function" again.
-        *   Name it `poll-status-handler`.
-        *   Choose a region.
-        *   Click "Create function".
-        *   This function checks the status of generation jobs by polling the Pixio API and triggering the next function when complete.
-        *   Copy the code from the `supabase-functions/poll-status-handler.ts` file in your project.
-        *   Add the following **Secrets**:
-            *   `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key
-            *   `COMFY_DEPLOY_API_KEY`: Your Pixio API key
-        *   Deploy the function.
+```bash
+npm install -g supabase
+```
 
-    *   **(c) process-result-handler Function:**
-        *   Click "New Function" again.
-        *   Name it `process-result-handler`.
-        *   Choose a region.
-        *   Click "Create function".
-        *   This function processes completed generation results by downloading the media, storing it in Supabase Storage, and updating the database.
-        *   Copy the code from the `supabase-functions/process-result-handlerts` file in your project.
-        *   Add the following **Secret**:
-            *   `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key
-        *   Deploy the function.
-        
-    *   **How these functions work together:**
-        *   When a user requests media generation, your app calls the `generate-media-handler` function
-        *   The `generate-media-handler` submits the job to Pixio API and triggers the `poll-status-handler`
-        *   The `poll-status-handler` periodically checks if generation is complete, and when it is, triggers the `process-result-handler`
-        *   The `process-result-handler` downloads the completed media, stores it in your Supabase bucket, and updates the database
-  
-5.  **Configure Authentication URLs:**
-    *   Go to Authentication > URL Configuration.
-    *   Set **Site URL** to `http://localhost:3000`.
-    *   Add `http://localhost:3000/auth/callback` to the **Redirect URLs**. (Remember to add your production URL here later).
+#### Start Local Supabase
 
-### 3. Set up Stripe
+1.  **Start local Supabase instance:**
+    ```bash
+    npx supabase start
+    ```
+    
+    This will:
+    - Start a local Postgres database
+    - Start Supabase Studio (local dashboard)
+    - Run all migrations in `supabase/migrations/`
+    - Create the `generated-media` storage bucket
+    - Output your local credentials
+    
+    **Note your local credentials** (especially the `service_role` key for `.env.local`)
+
+2.  **Access Local Studio:**
+    - Open http://localhost:54323 to access Supabase Studio locally
+    - View your database, run SQL queries, manage storage, etc.
+
+#### Link to Remote Supabase (Optional for Production)
+
+When you're ready to deploy to production:
+
+1.  **Login to Supabase:**
+    ```bash
+    supabase login
+    ```
+    
+    This opens a browser to authenticate with your Supabase account.
+
+2.  **Create a new project** in the [Supabase Dashboard](https://app.supabase.com/) if you haven't already.
+
+3.  **Link your local project to remote:**
+    ```bash
+    supabase link --project-ref your-project-ref
+    ```
+    
+    Find your project ref in your Supabase dashboard URL: `https://app.supabase.com/project/your-project-ref`
+
+4.  **Push your local database to remote:**
+    ```bash
+    supabase db push
+    ```
+    
+    This applies all your local migrations to the remote database.
+
+5.  **Get your remote credentials:**
+    - Go to Project Settings > API in your Supabase dashboard
+    - Copy the Project URL and `anon` key
+    - Copy the `service_role` key
+    - Add these to your `.env.local` for production builds
+
+#### Configure Storage Bucket
+
+The `generated-media` bucket is automatically created by the local Supabase setup. For remote Supabase:
+
+1. After running `supabase db push`, go to your remote Supabase dashboard
+2. Navigate to Storage
+3. The `generated-media` bucket should exist
+4. Configure bucket policies:
+   - Go to policies
+   - Create policy: "Give user access to their own folder"
+   - Allow SELECT, INSERT, UPDATE, DELETE for `(storage.foldername(name))[1] = auth.uid()::text`
+
+#### Configure Authentication
+
+1. In Supabase Dashboard, go to Authentication > URL Configuration
+2. Set **Site URL** to your application URL:
+   - Local: `http://localhost:3000`
+   - Production: `https://yourdomain.com`
+3. Add redirect URLs:
+   - `http://localhost:3000/auth/callback`
+   - `https://yourdomain.com/auth/callback` (for production)
+
+### 3. Set up ngrok for Local Webhook Testing
+
+Pixio API needs to send webhooks to your application. For local development, use ngrok to expose your local server:
+
+#### Install ngrok
+
+1.  **Download and install:**
+    - Visit [ngrok.com](https://ngrok.com/)
+    - Sign up for a free account
+    - Download and install ngrok
+    - Authenticate: `ngrok authtoken YOUR_AUTH_TOKEN`
+
+2.  **Start ngrok tunnel:**
+    ```bash
+    ngrok http 3000
+    ```
+    
+    This will output a public URL like: `https://abc123.ngrok-free.app`
+
+3.  **Update your environment:**
+    ```env
+    # In .env.local, use your ngrok URL for local development
+    NEXT_PUBLIC_SITE_URL=https://abc123.ngrok-free.app
+    ```
+
+4.  **Configure Pixio Deployments:**
+    - Go to your Pixio API dashboard
+    - For each deployment, set the webhook URL to:
+      `https://abc123.ngrok-free.app/api/webhooks/pixio`
+
+**Important**: Each time you restart ngrok, you'll get a new URL. Update your `.env.local` and Pixio webhook settings accordingly.
+
+**For Production**: Use your actual domain (e.g., `https://yourdomain.com`) instead of ngrok.
+
+### 4. Set up Stripe
 
 You'll set up your products, prices, and webhooks in the Stripe UI.
 
@@ -180,7 +230,7 @@ You'll set up your products, prices, and webhooks in the Stripe UI.
     *   Open `src/lib/config/pricing.ts`.
     *   Update the `STRIPE_PRICE_IDS` object and the `CREDIT_PACKS` array with the actual Price IDs you got from Stripe in step 1.
 
-### 4. Set up Environment Variables (.env.local)
+### 5. Set up Environment Variables (.env.local)
 
 Create a `.env.local` file in the root of your project and add the following variables, using the keys and URLs you obtained from Supabase, Stripe, and Pixio API.
 
@@ -204,14 +254,18 @@ NEXT_PUBLIC_STRIPE_PRICE_CREDIT_PACK_1000=price_your_1000_credits_price_id
 NEXT_PUBLIC_STRIPE_PRICE_CREDIT_PACK_2500=price_your_2500_credits_price_id
 NEXT_PUBLIC_STRIPE_PRICE_CREDIT_PACK_5000=price_your_5000_credits_price_id
 
-# Pixio API Key (from Pixio account)
+# Pixio API Configuration (Server-side only - NEVER expose these to client)
 COMFY_DEPLOY_API_KEY=YOUR_PIXIO_API_KEY
+DEPLOYMENT_ID_KREA_FLUX=3d9bb06d-af94-4247-9c29-b6dc7789f820
+DEPLOYMENT_ID_QWEN_EDIT=5a152b3b-2b07-4f9f-81e0-d394b9fbd6a3
+DEPLOYMENT_ID_WAN_FIRST_LAST=8c463102-0525-4cf1-8535-731fee0f93b4
 
-# Application URL (Important for redirects - use http://localhost:3000 for local)
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
+# Application URL (Important for redirects and webhooks)
+# Use ngrok URL for local development with webhooks
+NEXT_PUBLIC_SITE_URL=https://your-ngrok-url.ngrok-free.app
 ```
 
-### 5. Test Local Webhooks (Optional but Recommended)
+### 6. Test Stripe Webhooks
 
 Use the Stripe CLI to forward events to your local development server:
 
@@ -223,7 +277,7 @@ Use the Stripe CLI to forward events to your local development server:
     ```
 3.  The CLI will output a webhook signing secret. **This is different from the one in your Stripe dashboard settings.** Update the `STRIPE_WEBHOOK_SECRET` in your `.env.local` file with this local secret while testing locally. Remember to switch it back to your production secret when deploying.
 
-### 6. Run the Development Server
+### 7. Run the Development Server
 
 ```bash
 npm run dev
@@ -841,101 +895,51 @@ You need a storage bucket to store the generated images and videos.
 5. Click "Create bucket".
 6. Go to policies and create a new policy "Give user access to their own top level folder named uid" and allow SELECT, INSERT, UPDATE, DELETE.
 
-### 5. Create Supabase Edge Functions
+### 5. Configure Pixio API Webhooks
 
-This project uses three Supabase Edge Functions that work together in a chain to handle the asynchronous media generation process. This architecture offloads potentially long-running processes from your Next.js server, keeps API keys secure, and enables reliable background processing.
+This project uses a webhook-based architecture with Supabase Realtime for instant updates.
 
-#### 5.1 generate-media-handler (Initiate Generation)
+#### How the Webhook Architecture Works
 
-This function initiates the media generation process by submitting a job to the Pixio API.
+1. **Client initiates generation**: The user submits a generation request from the frontend
+2. **Server calls Pixio API**: The Next.js server action calls Pixio API with a `webhook_url` parameter pointing to your application
+3. **Pixio processes in background**: Pixio API processes the generation and sends status updates to your webhook
+4. **Webhook updates database**: Your webhook endpoint receives updates, downloads completed media, and updates the database
+5. **Realtime updates frontend**: Supabase Realtime instantly pushes database changes to the frontend
+6. **User sees live updates**: No polling needed - the UI updates immediately when generation completes
 
-1. Go to Edge Functions in your Supabase project dashboard.
-2. Click "New Function".
-3. Name it `generate-media-handler`.
-4. Choose a region.
-5. Select "Deno" as the runtime (default).
-6. Click "Create function".
-7. Once created, navigate to the function's page.
-8. Click the "Link to GitHub" button to connect it to your repository (optional but recommended).
-9. Add the `COMFY_DEPLOY_API_KEY` as a **Secret** in the function's settings.
-10. Copy the code from `supabase-functions/generate-media-handler.ts` into the function editor.
-11. **Important:** The function contains a `DEPLOYMENT_IDS` object which maps generation modes to specific Pixio API workflow IDs. Update these IDs with your actual Pixio API workflow deployments:
-    ```typescript
-    const DEPLOYMENT_IDS = {
-      image: '8f96cb86-5cbb-4ad0-9837-8a79eeb5103a', // Replace with your image generation workflow ID
-      video: 'd07cf1d5-412c-4270-b925-ffd6416abd1c', // Replace with your video generation workflow ID
-      firstLastFrameVideo: '8c463102-0525-4cf1-8535-731fee0f93b4', // Replace with your keyframe video workflow ID
-    };
-    ```
-12. Deploy the function.
+#### Setting Up the Webhook
 
-This function:
-- Validates the user request and parameters
-- Creates a record in the database with 'processing' status
-- Submits the generation job to Pixio API
-- Updates the database with the run ID
-- Asynchronously triggers the polling function
-- Returns immediately to the client
+1. **Configure Webhook URL:**
+   - Your webhook endpoint is automatically available at `/api/webhooks/pixio`
+   - For local development with Pixio webhooks, you'll need to expose your local server using a tool like [ngrok](https://ngrok.com/) or [localtunnel](https://localtunnel.github.io/www/)
+   - Example with ngrok: `ngrok http 3000` then use the provided URL (e.g., `https://abc123.ngrok.io/api/webhooks/pixio`)
+   - For production, use your actual domain (e.g., `https://yourapp.com/api/webhooks/pixio`)
 
-#### 5.2 poll-status-handler (Check Generation Progress)
+2. **Configure Deployment IDs:**
+   - Get your deployment IDs from the Pixio API dashboard for each workflow type
+   - Add them to your `.env.local` file:
+     ```env
+     NEXT_PUBLIC_DEPLOYMENT_ID_IMAGE=your_image_deployment_id
+     NEXT_PUBLIC_DEPLOYMENT_ID_VIDEO=your_video_deployment_id
+     NEXT_PUBLIC_DEPLOYMENT_ID_FIRST_LAST_FRAME_VIDEO=your_keyframe_deployment_id
+     ```
 
-This function periodically polls the Pixio API to check the status of a generation job.
+3. **Update Constants:**
+   - The deployment IDs in `src/lib/constants/media.ts` read from environment variables
+   - Ensure these match your Pixio deployments
 
-1. Go to Edge Functions in your Supabase project dashboard.
-2. Click "New Function".
-3. Name it `poll-status-handler`.
-4. Choose a region.
-5. Click "Create function".
-6. Copy the code from `supabase-functions/poll-status-handler.ts` into the function editor.
-7. Add the following **Secrets** in the function's settings:
-   - `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key
-   - `COMFY_DEPLOY_API_KEY`: Your Pixio API key
-8. Deploy the function.
+#### Webhook Security
 
-This function:
-- Is triggered by the `generate-media-handler` function
-- Checks the status of a generation job with the Pixio API
-- If the job is still processing, it reschedules itself to check again later
-- If the job fails, it updates the database status to 'failed'
-- If the job completes, it triggers the `process-result-handler` function
-- Implements exponential backoff for retries and handles API errors gracefully
+The webhook endpoint validates requests by:
+- Checking for the presence of required fields (`run_id`, `status`)
+- Verifying the media record exists in your database
+- Only processing updates for records that exist
 
-#### 5.3 process-result-handler (Process Completed Media)
-
-This function processes successful generation results from the Pixio API.
-
-1. Go to Edge Functions in your Supabase project dashboard.
-2. Click "New Function".
-3. Name it `process-result-handler`.
-4. Choose a region.
-5. Click "Create function".
-6. Copy the code from `supabase-functions/process-result-handler.ts` into the function editor.
-7. Add the `SUPABASE_SERVICE_ROLE_KEY` as a **Secret** in the function's settings.
-8. Deploy the function.
-
-This function:
-- Is triggered by the `poll-status-handler` function when a generation completes
-- Downloads the generated media from the Pixio API's temporary URL
-- Determines the appropriate file extension and content type
-- Uploads the file to Supabase Storage
-- Updates the database with the completed status, permanent URL, and metadata
-- Handles any errors and updates the database if processing fails
-
-### How These Functions Work Together
-
-The three functions form a chain:
-
-1. **Client → generate-media-handler**: The client calls the `generate-media-handler`, which initiates the generation process with the Pixio API and returns immediately with a success response.
-
-2. **generate-media-handler → poll-status-handler**: The `generate-media-handler` asynchronously invokes the `poll-status-handler` to begin checking the status of the generation.
-
-3. **poll-status-handler → poll-status-handler**: The `poll-status-handler` schedules itself to run again if the generation is still in progress, creating a polling loop.
-
-4. **poll-status-handler → process-result-handler**: When the `poll-status-handler` detects the generation is complete, it invokes the `process-result-handler` to download and process the result.
-
-5. **process-result-handler → Database**: The `process-result-handler` updates the database with the final result information, which the client can then query to get the completed media.
-
-This chain ensures reliable processing even if the client disconnects after starting the generation.
+For additional security in production, consider:
+- Adding IP whitelist for Pixio's webhook servers
+- Implementing request signing verification if Pixio provides it
+- Rate limiting the webhook endpoint
 
 ### 1. Create Stripe Products and Prices
 
@@ -1258,471 +1262,121 @@ If users report issues with credits not being added after purchase or not resett
 
 </details>
 
+<details>
+<summary>Architecture: Webhook + Realtime</summary>
+
+### How It Works
+
+The application uses a modern webhook-based architecture with Supabase Realtime for instant UI updates:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Server
+    participant PixioAPI
+    participant Webhook
+    participant Database
+    participant Realtime
+    
+    User->>Frontend: Click Generate
+    Frontend->>Server: generateMedia()
+    Server->>Database: Create record (pending)
+    Server->>PixioAPI: POST /api/run + webhook_url
+    PixioAPI-->>Server: run_id
+    Server->>Database: Update with run_id
+    Server-->>Frontend: Success
+    
+    Note over PixioAPI: Processing...
+    
+    PixioAPI->>Webhook: POST status update
+    Webhook->>PixioAPI: Download media (if complete)
+    Webhook->>Database: Upload & update record
+    Database->>Realtime: postgres_changes event
+    Realtime-->>Frontend: Live update
+    Frontend-->>User: Show completed media
+```
+
+### Key Benefits
+
+1. **No Polling**: Frontend receives instant updates via Realtime
+2. **Simpler Architecture**: No need for Edge Functions or polling loops
+3. **Better UX**: Immediate feedback when generation completes
+4. **Lower Costs**: Fewer function invocations and database queries
+5. **Reliable**: Webhooks ensure updates are received even if client disconnects
+
+### Real-time Features
+
+The application uses Supabase Realtime subscriptions for:
+
+1. **Media Library** (`src/components/dashboard/media-library.tsx`):
+   - Listens to `generated_media` table changes
+   - Automatically updates when new media is generated
+   - Shows status changes in real-time
+
+2. **Credits Display** (`src/components/shared/credits-display.tsx`):
+   - Listens to `users` table changes
+   - Updates immediately when credits are used or purchased
+   - No manual refresh needed
+
+3. **Generation Form** (`src/components/dashboard/media-generation-form.tsx`):
+   - Subscribes to specific media record during generation
+   - Shows live preview when generation completes
+   - Displays errors immediately
+
+</details>
 
 <details>
 <summary>Adding Pixio API Deployments and Modalities</summary>
 
 The application supports generating different types of media (modalities) using ComfyUI workflows deployed via the Pixio API. This section explains how to add new modalities or update existing ones.
 
-### Understanding Deployments and Modalities
+### Adding New Pixio Models
 
-- **Deployment**: A specific ComfyUI workflow hosted on Pixio API with a unique ID.
-- **Modality**: A type of media that can be generated (e.g., image, video, audio, 3D model).
-- **Credit Cost**: Each modality costs a different amount of credits to generate, based on the computational resources required.
+To add new Pixio API models to your application:
 
-### Setting Up New ComfyUI Workflows
-
-1. **Create a ComfyUI Workflow**:
-   - Design your workflow for the specific generation task (e.g., a new image model, a different video technique, an audio generation workflow).
-   - Test thoroughly in ComfyUI to ensure it produces the expected output files and format.
-
-2. **Deploy to Pixio API**:
-   - Sign in to your [Pixio API account](https://api.myapps.ai/).
-   - Upload or create your workflow deployment.
-   - Note the **Deployment ID** assigned to your workflow. This ID is used to trigger the workflow via the API.
-
-3. **Update Application Configuration**:
-   - Add the new Deployment ID to the `DEPLOYMENT_IDS` object in `src/lib/constants/media.ts`.
-   - Define the `CREDIT_COSTS` for the new modality in the same file.
+1. **Add model definition** to [`src/lib/pixio-api.ts`](src/lib/pixio-api.ts):
 
 ```typescript
-// src/lib/constants/media.ts
+// Define the input type
+export interface YourModelInputs {
+  prompt: string;
+  // ... other inputs
+}
 
-export const DEPLOYMENT_IDS = {
-    image: '8f96cb86-5cbb-4ad0-9837-8a79eeb5103a', // Your Image Deployment ID
-    video: 'd07cf1d5-412c-4270-b925-ffd6416abd1c',  // Your Video Deployment ID
-    // Add your new deployment ID here:
-    // audio: 'your-new-audio-deployment-id',
-    // three_d: 'your-new-3d-deployment-id',
-  } as const;
-  
-  export const CREDIT_COSTS = {
-    image: 10,
-    video: 100,
-    // Define the credit cost for your new modality:
-    // audio: 50,
-    // three_d: 150,
-  } as const;
-  
-  // Update the MEDIA_TYPES tuple to include your new modality
-  export const MEDIA_TYPES = ['image', 'video'] as const; // Add 'audio', 'three_d', etc.
-  
-  export type MediaType = typeof MEDIA_TYPES[number];
-  
-  export type MediaStatus = 'pending' | 'processing' | 'completed' | 'failed';
-  
-  export type GenerationResult = {
-    success: boolean;
-    mediaId?: string;
-    runId?: string;
-    status?: string;
-    mediaUrl?: string;
-    error?: string;
-  };
+// Create the model definition
+export const YOUR_MODEL: PixioModel<YourModelInputs> = {
+  id: 'your-model-id',
+  name: 'Your Model Name',
+  description: 'Description of what this model does',
+  deploymentId: process.env.DEPLOYMENT_ID_YOUR_MODEL || 'default-id',
+  category: 'image', // or 'video' or 'edit'
+  creditCost: 20,
+  inputSchema: {
+    prompt: {
+      type: 'string',
+      required: true,
+      description: 'Text prompt'
+    }
+    // ... define all inputs
+  }
+};
+
+// Add to PIXIO_MODELS
+export const PIXIO_MODELS = {
+  // ... existing models
+  yourModel: YOUR_MODEL
+} as const;
 ```
 
-### Adding a New Modality (Frontend & Backend)
+2. **Add environment variable** to `.env.local`:
+```env
+DEPLOYMENT_ID_YOUR_MODEL=your_deployment_id_from_pixio
+```
 
-To fully integrate a new modality (e.g., 'audio'):
+3. **Update generation logic** in [`src/lib/actions/media.actions.ts`](src/lib/actions/media.actions.ts) to handle the new model.
 
-1.  **Update `src/lib/constants/media.ts`**: Add the new modality to `DEPLOYMENT_IDS`, `CREDIT_COSTS`, and `MEDIA_TYPES` as shown above.
-2.  **Update Database Schema**: Modify the `generated_media` table's `media_type` CHECK constraint to include the new type.
-
-    ```sql
-    -- Update the check constraint for media_type
-    ALTER TABLE public.generated_media 
-    DROP CONSTRAINT generated_media_media_type_check,
-    ADD CONSTRAINT generated_media_media_type_check 
-    CHECK (media_type IN ('image', 'video', 'audio')); -- Add 'audio' and any other new types
-    ```
-3.  **Update Supabase Edge Function**: Ensure your `generate-media-handler` function can handle the new `mediaType`. You might need to adjust the `fileExtension` and `contentType` logic based on the output format of your new workflow.
-
-    ```typescript
-    // Inside supabase/functions/generate-media-handler/index.ts
-    import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-    import { corsHeaders } from '../_shared/cors.ts'; // Assuming you have a _shared folder with cors.ts
-
-    // Define your Pixio API Deployment IDs here
-    const DEPLOYMENT_IDS = {
-      image: '8f96cb86-5cbb-4ad0-9837-8a79eeb5103a', // Replace with your Image Deployment ID
-      video: 'd07cf1d5-412c-4270-b925-ffd6416abd1c'  // Replace with your Video Deployment ID
-      // Add other modalities here
-    };
-
-    // Utility to delay execution
-    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-    serve(async (req) => {
-      // Handle CORS preflight request
-      if (req.method === 'OPTIONS') {
-        return new Response('ok', {
-          headers: corsHeaders,
-        });
-      }
-
-      let mediaId = null; // Keep track of mediaId for error handling
-
-      try {
-        // --- Authentication & Input Validation ---
-        // Create a Supabase client with the user's JWT to check authentication
-        const supabaseClient = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-          {
-            global: {
-              headers: { Authorization: req.headers.get('Authorization') },
-            },
-          }
-        );
-
-        const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-        if (authError || !user) {
-          console.error('Auth error:', authError);
-          return new Response(
-            JSON.stringify({ error: 'Unauthorized' }),
-            {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-              status: 401,
-            }
-          );
-        }
-        const userId = user.id;
-
-        const body = await req.json();
-        const { prompt, mediaType } = body;
-        mediaId = body.mediaId; // Assign mediaId here
-
-        if (!prompt || !mediaType || !mediaId || !Object.keys(DEPLOYMENT_IDS).includes(mediaType)) {
-          return new Response(
-            JSON.stringify({ error: 'Missing or invalid parameters' }),
-            {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-              status: 400,
-            }
-          );
-        }
-        console.log(`Function received: userId=${userId}, mediaId=${mediaId}, type=${mediaType}`);
-
-        // Create a Supabase client with the Service Role Key for admin operations (e.g., updating DB status, Storage)
-        const supabaseAdmin = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        );
-
-        // --- Update Status to Processing ---
-        // Ensure record exists and belongs to the user before proceeding
-        const { error: initialUpdateError } = await supabaseAdmin
-          .from('generated_media')
-          .update({ status: 'processing' })
-          .eq('id', mediaId)
-          .eq('user_id', userId); // Ensure we only update the correct user's record
-
-        if (initialUpdateError) {
-          console.error(`Error updating initial status for mediaId ${mediaId}:`, initialUpdateError);
-          // This is critical, the record might not exist or belong to the user
-          throw new Error(`Failed to set initial processing status: ${initialUpdateError.message}`);
-        }
-        console.log(`Media record ${mediaId} status set to processing.`);
-
-
-        // --- Trigger ComfyUI API ---
-        const deploymentId = DEPLOYMENT_IDS[mediaType];
-        const comfyApiKey = Deno.env.get('COMFY_DEPLOY_API_KEY');
-
-        if (!comfyApiKey) {
-          throw new Error("COMFY_DEPLOY_API_KEY environment variable not set.");
-        }
-
-        const triggerResponse = await fetch("https://api.myapps.ai/api/run", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${comfyApiKey}`,
-          },
-          body: JSON.stringify({
-            deployment_id: deploymentId,
-            inputs: {
-              "prompt": prompt,
-              // Add other inputs required by your workflow here
-            },
-          }),
-        });
-
-        if (!triggerResponse.ok) {
-          const errorBody = await triggerResponse.text();
-          console.error(`ComfyUI trigger failed: ${triggerResponse.status} ${triggerResponse.statusText}`, errorBody);
-          throw new Error(`ComfyUI trigger failed: ${triggerResponse.statusText}`);
-        }
-
-        const triggerResult = await triggerResponse.json();
-        const run_id = triggerResult.run_id;
-
-        if (!run_id) {
-          throw new Error('ComfyUI did not return a run_id');
-        }
-        console.log(`ComfyUI run started: ${run_id}`);
-
-        // Update DB with run_id and set status to processing (again, for safety)
-        const { error: runIdUpdateError } = await supabaseAdmin
-          .from('generated_media')
-          .update({
-            status: 'processing', // Ensure status is 'processing'
-            metadata: { run_id: run_id } // Store the run_id
-          })
-          .eq('id', mediaId);
-
-        if (runIdUpdateError) {
-          console.error(`Error updating record ${mediaId} with run_id ${run_id}:`, runIdUpdateError);
-          // Continue processing, but log the error
-        }
-
-
-        // --- Polling for Result ---
-        let currentStatus = 'processing'; // Start polling with the expected initial status
-        let finalOutput = null;
-        const maxAttempts = 90; // ~15 minutes timeout (90 * 10s)
-        let attempts = 0;
-        let consecutiveApiErrors = 0;
-        const maxConsecutiveApiErrors = 10; // Give up polling if API fails 10 times in a row
-
-        while (['processing', 'not-started', 'running', 'uploading', 'queued'].includes(currentStatus) && attempts < maxAttempts) {
-          attempts++;
-          console.log(`Polling attempt ${attempts}/${maxAttempts} for run ${run_id}. Current status: ${currentStatus}`);
-          await delay(10000); // Wait 10 seconds between polls
-
-          try {
-            const statusResponse = await fetch(`https://api.myapps.ai/api/run?run_id=${run_id}`, {
-              method: "GET",
-              headers: {
-                "Authorization": `Bearer ${comfyApiKey}`,
-              },
-            });
-
-            if (!statusResponse.ok) {
-              consecutiveApiErrors++;
-              console.error(`Polling API failed (attempt ${attempts}, consecutive errors ${consecutiveApiErrors}): ${statusResponse.status} ${statusResponse.statusText}`);
-              if (consecutiveApiErrors >= maxConsecutiveApiErrors) {
-                currentStatus = 'failed'; // Mark as failed if API is consistently unavailable
-                finalOutput = { error: `Polling API failed ${maxConsecutiveApiErrors} consecutive times.` };
-                break; // Exit loop
-              }
-              continue; // Skip to next attempt if within error threshold
-            }
-
-            // Reset consecutive error count on success
-            consecutiveApiErrors = 0;
-
-            finalOutput = await statusResponse.json();
-            currentStatus = finalOutput.status || 'unknown'; // Default to 'unknown' if status is missing
-            console.log(`Status received for run ${run_id}: ${currentStatus}`);
-
-            // Exit loop immediately if successful or failed
-            if (currentStatus === 'success' || currentStatus === 'complete' || currentStatus === 'failed') {
-              break;
-            }
-
-          } catch (pollError: any) {
-            consecutiveApiErrors++;
-            console.error(`Network error during polling attempt ${attempts} (consecutive errors ${consecutiveApiErrors}):`, pollError.message);
-            if (consecutiveApiErrors >= maxConsecutiveApiErrors) {
-              currentStatus = 'failed'; // Mark as failed after too many network errors
-              finalOutput = { error: `Polling network error ${maxConsecutiveApiErrors} consecutive times: ${pollError.message}` };
-              break; // Exit loop
-            }
-            // Continue polling if within error threshold
-          }
-        } // End of while loop
-
-        // --- Handle Final Status ---
-        console.log(`Polling finished after ${attempts} attempts. Final status: ${currentStatus}`);
-
-        if (currentStatus === 'success' || currentStatus === 'complete') {
-          // Check if output files exist in the response
-          if (!finalOutput?.outputs || finalOutput.outputs.length === 0 || !finalOutput.outputs[0].url) {
-             console.error(`ComfyUI run ${run_id} reported success but no output URL found.`);
-             currentStatus = 'failed'; // Treat as failed if no output URL
-             finalOutput = { error: 'Generation reported success but no output file was produced.' };
-          }
-        }
-
-
-        if (currentStatus === 'success' || currentStatus === 'complete') {
-          // Assuming the first output is the main media file
-          const remoteMediaUrl = finalOutput.outputs[0].url;
-          let fileExtension;
-          let contentType;
-
-          // Determine file extension and content type based on media type
-          switch(mediaType) {
-              case 'image':
-                  fileExtension = '.png'; // Or whatever your workflow outputs
-                  contentType = 'image/png';
-                  break;
-              case 'video':
-                  fileExtension = '.webp'; // Or '.mp4', etc.
-                  contentType = 'video/webm'; // Or 'video/mp4'
-                  break;
-              case 'audio':
-                  fileExtension = '.mp3'; // Or '.wav', etc.
-                  contentType = 'audio/mpeg'; // Or 'audio/wav'
-                  break;
-              // Add cases for your new modalities
-              default:
-                  fileExtension = '.bin';
-                  contentType = 'application/octet-stream';
-          }
-
-
-          console.log(`Downloading generated ${mediaRecord.media_type} from: ${remoteMediaUrl}`);
-
-          // Download the media from Pixio's CDN
-          const mediaResponse = await fetch(remoteMediaUrl, {
-            method: 'GET',
-            headers: {
-              'Cache-Control': 'no-cache', // Ensure fresh download
-              'Pragma': 'no-cache'
-            }
-          });
-
-          if (!mediaResponse.ok) {
-            console.error(`Failed to download media: ${mediaResponse.status} ${mediaResponse.statusText}`);
-            throw new Error(`Failed to download media: ${mediaResponse.statusText}`);
-          }
-
-          const mediaBuffer = await mediaResponse.arrayBuffer();
-          const contentSize = mediaBuffer.byteLength;
-          console.log(`Downloaded media size: ${(contentSize / 1024).toFixed(2)} KB`);
-
-          if (contentSize === 0) {
-            throw new Error('Downloaded file is empty');
-          }
-
-          // Generate a unique filename and storage path
-          const timestamp = Date.now();
-          const fileName = `${timestamp}-${mediaId.substring(0, 8)}${fileExtension}`;
-          const storagePath = `${userId}/${mediaType}s/${fileName}`; // e.g., user_id/images/timestamp-id.png
-
-          console.log(`Uploading to Supabase storage path: ${storagePath}`);
-
-
-          // Upload to Supabase storage
-          const { data: uploadData, error: uploadError } = await supabaseAdmin
-            .storage
-            .from('generated-media') // Your storage bucket name
-            .upload(storagePath, mediaBuffer, {
-              contentType,
-              upsert: true, // Overwrite if a file with the same name exists (less likely with timestamp)
-              cacheControl: '3600' // Cache for 1 hour
-            });
-
-          if (uploadError) {
-            console.error('Storage upload error:', uploadError);
-            throw new Error(`Storage upload error: ${uploadError.message}`);
-          }
-          console.log(`Successfully uploaded to storage: ${uploadData?.path}`);
-
-          // Get public URL
-          const { data: publicUrlData } = supabaseAdmin
-            .storage
-            .from('generated-media') // Your storage bucket name
-            .getPublicUrl(storagePath);
-
-          // Update the media record in the database with final status, URL, and path
-          const { error: finalUpdateError } = await supabaseAdmin
-            .from('generated_media')
-            .update({
-              status: 'completed',
-              media_url: publicUrlData.publicUrl,
-              storage_path: storagePath,
-              metadata: {
-                ...finalOutput?.metadata || {}, // Keep existing metadata
-                run_id,
-                original_url: remoteMediaUrl, // Store the original Pixio API URL
-                file_size: mediaBuffer.byteLength,
-                completed_at: new Date().toISOString(),
-              }
-            })
-            .eq('id', mediaId); // Update the specific record
-
-          if (finalUpdateError) {
-            console.error(`Failed to update final record ${mediaId}:`, finalUpdateError);
-            // Log error but function technically succeeded in generating and uploading
-          } else {
-            console.log(`Media ${mediaId} completed successfully and record updated.`);
-          }
-
-        } else {
-          // Generation failed or timed out
-          const errorMessage = currentStatus === 'failed' ? finalOutput?.error || 'Generation failed' : attempts >= maxAttempts ? 'Generation timed out' : `Generation stopped with unexpected status: ${currentStatus}`;
-          console.error(`Generation failed or timed out for run ${run_id}: ${errorMessage}`);
-
-          // Update the record to mark as failed
-          const { error: failUpdateError } = await supabaseAdmin
-            .from('generated_media')
-            .update({
-              status: 'failed',
-              metadata: {
-                ...finalOutput?.metadata || {}, // Keep existing metadata
-                run_id,
-                error: errorMessage,
-                final_api_status: currentStatus,
-                failed_at: new Date().toISOString(),
-              }
-            })
-            .eq('id', mediaId); // Update the specific record
-
-          if (failUpdateError) {
-            console.error(`Failed to update record ${mediaId} to failed status:`, failUpdateError);
-          } else {
-             console.log(`Media ${mediaId} marked as failed.`);
-          }
-        }
-
-        // --- Return Success (Function execution completed, background task finished) ---
-        // The function returns success if it finished processing the request,
-        // regardless of whether the generation itself succeeded or failed.
-        return new Response(
-          JSON.stringify({ success: true, finalStatus: currentStatus }),
-          {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 200,
-          }
-        );
-
-      } catch (error: any) {
-        console.error('Supabase Function Error:', error.message);
-
-        // Attempt to update DB record to failed if possible and mediaId is known
-        if (mediaId) {
-          try {
-            const supabaseAdmin = createClient(
-              Deno.env.get('SUPABASE_URL') ?? '',
-              Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-            );
-            await supabaseAdmin
-              .from('generated_media')
-              .update({
-                status: 'failed',
-                metadata: { error: `Function error: ${error.message}` },
-              })
-              .eq('id', mediaId);
-              console.log(`Media ${mediaId} status updated to failed due to function error.`);
-          } catch (updateError) {
-            console.error(`Failed to update status to failed on error for mediaId ${mediaId}:`, updateError);
-          }
-        }
-
-        return new Response(
-          JSON.stringify({ error: error.message }),
-          {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 500,
-          }
-        );
-      }
-    });
-    ```
+4. **Update UI** to expose the new model option to users.
 
 </details>
 

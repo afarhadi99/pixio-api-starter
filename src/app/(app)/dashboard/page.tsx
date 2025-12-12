@@ -7,9 +7,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { MediaGenerationForm } from '@/components/dashboard/media-generation-form';
 import { MediaLibrary } from '@/components/dashboard/media-library';
 import { fetchUserMedia } from '@/lib/actions/media.actions';
-// Import the new constants
+// Import Pixio models
+import { PIXIO_MODELS } from '@/lib/pixio-api';
 import { CREDIT_COSTS, GENERATION_MODES } from '@/lib/constants/media';
-import { Sparkles, Bot, Image as ImageIconLucide, Film, StepForward } from 'lucide-react'; // Added StepForward icon
+import { Sparkles, Bot, Image as ImageIconLucide, Film, Wand2 } from 'lucide-react';
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -50,61 +51,72 @@ export default async function DashboardPage() {
         <CardHeader className="pb-4 border-b border-white/15 bg-gradient-to-b from-white/5 to-transparent">
           <div className="flex items-center gap-4">
              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary/30 to-secondary/30 flex items-center justify-center border border-white/15 shadow-inner">
-                <Bot className="w-6 h-6 text-primary-foreground" />
+                <Sparkles className="w-6 h-6 text-primary-foreground" />
              </div>
              <div>
                 <CardTitle className="text-2xl md:text-3xl text-foreground/95">AI Media Generator</CardTitle>
                 <CardDescription className="text-base text-muted-foreground">
-                  Generate images and videos using your credits.
+                  Generate images and videos using state-of-the-art Pixio API models.
                 </CardDescription>
              </div>
           </div>
         </CardHeader>
         <CardContent className="pt-8">
-          {/* Update Tabs to include the new mode */}
           <Tabs defaultValue={defaultTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-8 bg-transparent p-0 gap-4"> {/* Changed to grid-cols-3 */}
+            <TabsList className="grid w-full grid-cols-3 mb-8 bg-transparent p-0 gap-4">
+              {/* Krea Flux - Image Generation */}
               <TabsTrigger
                 value="image"
-                className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg border border-white/20 bg-white/15 text-foreground/80 hover:bg-white/20 hover:text-foreground data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/80 data-[state=active]:to-secondary/80 data-[state=active]:text-primary-foreground data-[state=active]:border-transparent data-[state=active]:shadow-lg transition-all duration-300 text-base font-medium"
+                className="flex flex-col items-center justify-center gap-1 py-3 px-4 rounded-lg border border-white/20 bg-white/5 text-foreground/80 hover:bg-white/10 hover:text-foreground data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/80 data-[state=active]:to-secondary/80 data-[state=active]:text-primary-foreground data-[state=active]:border-transparent data-[state=active]:shadow-lg transition-all duration-300 text-sm font-medium"
               >
-                <ImageIconLucide className="w-5 h-5 mr-1" /> Image
+                <ImageIconLucide className="w-5 h-5" />
+                <span className="font-semibold">{PIXIO_MODELS.kreaFlux.name}</span>
+                <span className="text-xs opacity-70">Image Generation</span>
               </TabsTrigger>
+
+              {/* Qwen Edit - Image Editing */}
               <TabsTrigger
                 value="video"
-                className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg border border-white/20 bg-white/15 text-foreground/80 hover:bg-white/20 hover:text-foreground data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/80 data-[state=active]:to-secondary/80 data-[state=active]:text-primary-foreground data-[state=active]:border-transparent data-[state=active]:shadow-lg transition-all duration-300 text-base font-medium"
+                className="flex flex-col items-center justify-center gap-1 py-3 px-4 rounded-lg border border-white/20 bg-white/5 text-foreground/80 hover:bg-white/10 hover:text-foreground data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/80 data-[state=active]:to-secondary/80 data-[state=active]:text-primary-foreground data-[state=active]:border-transparent data-[state=active]:shadow-lg transition-all duration-300 text-sm font-medium"
               >
-                 <Film className="w-5 h-5 mr-1" /> Video (Txt2Vid)
+                <Wand2 className="w-5 h-5" />
+                <span className="font-semibold">{PIXIO_MODELS.qwenEdit.name}</span>
+                <span className="text-xs opacity-70">Image Editing</span>
               </TabsTrigger>
-              {/* New Tab Trigger */}
+
+              {/* Wan 2.2 - Video from Keyframes */}
               <TabsTrigger
                 value="firstLastFrameVideo"
-                className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg border border-white/20 bg-white/15 text-foreground/80 hover:bg-white/20 hover:text-foreground data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/80 data-[state=active]:to-secondary/80 data-[state=active]:text-primary-foreground data-[state=active]:border-transparent data-[state=active]:shadow-lg transition-all duration-300 text-base font-medium"
+                className="flex flex-col items-center justify-center gap-1 py-3 px-4 rounded-lg border border-white/20 bg-white/5 text-foreground/80 hover:bg-white/10 hover:text-foreground data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/80 data-[state=active]:to-secondary/80 data-[state=active]:text-primary-foreground data-[state=active]:border-transparent data-[state=active]:shadow-lg transition-all duration-300 text-sm font-medium"
               >
-                 <StepForward className="w-5 h-5 mr-1" /> Video (Img2Vid)
+                 <Film className="w-5 h-5" />
+                <span className="font-semibold">{PIXIO_MODELS.wanFirstLastFrame.name}</span>
+                <span className="text-xs opacity-70">Video Generation</span>
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="image" className="mt-0">
+            {/* Krea Flux Tab */}
+            <TabsContent value="image" className="mt-4">
               <MediaGenerationForm
-                generationMode="image" // Use generationMode prop
+                generationMode="image"
                 creditCost={CREDIT_COSTS.image}
                 userCredits={totalCredits}
               />
             </TabsContent>
 
-            <TabsContent value="video" className="mt-0">
+            {/* Qwen Edit Tab */}
+            <TabsContent value="video" className="mt-4">
               <MediaGenerationForm
-                generationMode="video" // Use generationMode prop
+                generationMode="video"
                 creditCost={CREDIT_COSTS.video}
                 userCredits={totalCredits}
               />
             </TabsContent>
 
-            {/* New Tab Content */}
-            <TabsContent value="firstLastFrameVideo" className="mt-0">
+            {/* Wan 2.2 First/Last Frame Tab */}
+            <TabsContent value="firstLastFrameVideo" className="mt-4">
               <MediaGenerationForm
-                generationMode="firstLastFrameVideo" // Use generationMode prop
+                generationMode="firstLastFrameVideo"
                 creditCost={CREDIT_COSTS.firstLastFrameVideo}
                 userCredits={totalCredits}
               />

@@ -948,7 +948,7 @@ export default function LandingPage() {
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
             <GradientHeading className="mx-auto justify-center" from="from-secondary" to="to-primary">
-              Ready-to-Use Pixio API Machines
+              Pixio API Models
             </GradientHeading>
 
             <motion.p
@@ -958,15 +958,15 @@ export default function LandingPage() {
               viewport={{ once: true }}
               transition={{ duration: 0.6, delay: 0.2 }}
             >
-              Get started quickly with our pre-configured machines for image and video generation
+              Powerful AI models integrated into your application for image generation, editing, and video creation
             </motion.p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8">
+          <div className="grid md:grid-cols-3 gap-8">
             <WorkflowCard
-              title="Flux with LoRA Machine"
-              description="Create beautiful illustrations and stylized images using this optimized Flux machine. Perfect for generating high-quality artwork with LoRA fine-tuning capabilities."
-              link="https://api.myapps.ai/share/alisher-farhadi-book-illustrations"
+              title="Krea Flux"
+              description="High-quality image generation with the Flux model. Perfect for fashion, portraits, and detailed imagery. Create stunning visuals from text prompts."
+              link="https://api.myapps.ai/share/workflow/user_2avNabxB8PQU2qdh6dkcHx6J7AI/krea"
               icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>}
@@ -974,25 +974,24 @@ export default function LandingPage() {
             />
 
             <WorkflowCard
-              title="Wan 2.1 Text to Video Machine"
-              description="Generate smooth, high-quality animations and videos with this specialized Wan 2.1 machine. Create fluid motion sequences from simple text prompts."
-              link="https://api.myapps.ai/share/alisher-farhadi-wan"
-              icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              title="Qwen Edit"
+              description="AI-powered image editing with multiple image inputs and positive/negative prompting. Transform and enhance your images with intelligent edits."
+              link="https://api.myapps.ai/share/workflow/user_34PT7Nq6CR0OkBRluLtZZAPYUWy/qwen-edit-clone"
+              icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
               </svg>}
               index={2}
             />
+
             <WorkflowCard
-              title="Wan 2.1 First to Last Frame Machine"
-              description="Generate smooth video transitions between a start and end image using the Wan 2.1 model. Bring static images to life with controlled animation."
-              link="https://api.myapps.ai/share/alisher-farhadi-wan-2-1-first-to-last-frame" // Placeholder link - update if you have a specific share link
+              title="Wan 2.2 First/Last Frame"
+              description="Generate smooth video transitions between two keyframe images. Create cinematic animations from start and end images with AI-powered interpolation."
+              link="https://api.myapps.ai/share/workflow/user_34PT7Nq6CR0OkBRluLtZZAPYUWy/wan22-first-last-frame"
               icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                {/* Using a slightly different icon to represent frame-to-frame */}
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M4 6h8M4 10h8M4 14h8M4 18h8" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>}
-              index={3} // Increment index for animation delay
+              index={3}
             />
-            
           </div>
         </div>
       </section>

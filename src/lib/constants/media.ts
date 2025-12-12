@@ -1,32 +1,35 @@
 // src/lib/constants/media.ts
+// Re-exports from pixio-api.ts for backwards compatibility
 
-export const DEPLOYMENT_IDS = {
-    image: '8f96cb86-5cbb-4ad0-9837-8a79eeb5103a',
-    video: 'd07cf1d5-412c-4270-b925-ffd6416abd1c',
-    firstLastFrameVideo: '8c463102-0525-4cf1-8535-731fee0f93b4',
-  } as const;
-  
-  export const CREDIT_COSTS = {
-    image: 10,
-    video: 100,
-    firstLastFrameVideo: 100,
-  } as const;
-  
-  export const MEDIA_TYPES = ['image', 'video'] as const;
-  
-  export type MediaType = typeof MEDIA_TYPES[number];
+import { PIXIO_MODELS } from '@/lib/pixio-api';
 
-  export const GENERATION_MODES = ['image', 'video', 'firstLastFrameVideo'] as const;
-  export type GenerationMode = typeof GENERATION_MODES[number];
-  
-  export type MediaStatus = 'pending' | 'processing' | 'completed' | 'failed';
-  
-  export type GenerationResult = {
-    success: boolean;
-    mediaId?: string;
-    runId?: string;
-    status?: string;
-    mediaUrl?: string;
-    error?: string;
-  };
-  
+// Export credit costs from models
+// image = Krea Flux (10 credits)
+// video = Qwen Edit (15 credits)
+// firstLastFrameVideo = Wan 2.2 (100 credits)
+export const CREDIT_COSTS = {
+  image: PIXIO_MODELS.kreaFlux.creditCost,                    // 10 credits
+  video: PIXIO_MODELS.qwenEdit.creditCost,                    // 15 credits
+  firstLastFrameVideo: PIXIO_MODELS.wanFirstLastFrame.creditCost, // 100 credits
+} as const;
+
+// Media types
+export const MEDIA_TYPES = ['image', 'video'] as const;
+export type MediaType = typeof MEDIA_TYPES[number];
+
+// Generation modes (maps to models)
+export const GENERATION_MODES = ['image', 'video', 'firstLastFrameVideo'] as const;
+export type GenerationMode = typeof GENERATION_MODES[number];
+
+// Status types
+export type MediaStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+// Generation result type
+export type GenerationResult = {
+  success: boolean;
+  mediaId?: string;
+  runId?: string;
+  status?: string;
+  mediaUrl?: string;
+  error?: string;
+};

@@ -42,7 +42,7 @@ export async function triggerMediaGeneration(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": "Bearer " + process.env.COMFY_DEPLOY_API_KEY,
+        "Authorization": "Bearer " + process.env.PIXIO_DEPLOY_API_KEY,
       },
       body: JSON.stringify({
         deployment_id: deploymentId,
@@ -116,7 +116,7 @@ export async function checkGenerationStatus(mediaId: string, runId: string): Pro
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": "Bearer " + process.env.COMFY_DEPLOY_API_KEY,
+        "Authorization": "Bearer " + process.env.PIXIO_DEPLOY_API_KEY,
       },
     });
     

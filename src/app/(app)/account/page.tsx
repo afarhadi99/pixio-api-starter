@@ -14,7 +14,19 @@ import { ManageSubscriptionButton } from '@/components/account/manage-subscripti
 import { getUserCredits } from '@/lib/credits';
 import { CREDIT_PACKS } from '@/lib/config/pricing';
 import { CreditPackCard } from '@/components/account/credit-pack-card';
-import { User as UserIcon, CreditCard, Zap, Wallet } from 'lucide-react';
+import { User as UserIcon, CreditCard, Zap, Wallet, ImageIcon, Film, Wand2, Clock } from 'lucide-react';
+
+// Helper function to format time ago
+function getTimeAgo(date: Date): string {
+  const now = new Date();
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
 export default async function AccountPage() {
   const supabase = await createClient();
@@ -131,13 +143,59 @@ export default async function AccountPage() {
                   <Separator className="bg-white/15" />
                   <div>
                     <h3 className="font-semibold text-lg mb-3 text-foreground/95">Recent Usage</h3>
-                    <div className="space-y-3 max-h-40 overflow-y-auto pr-2 styled-scrollbars">
-                      {safeUsage.map((usage) => (
-                        <div key={usage.id} className="flex justify-between items-center text-sm text-foreground/80 border-b border-white/5 pb-2 last:border-b-0">
-                          <span>{usage.description || 'Credit usage'}</span>
-                          <span className="font-medium text-destructive/80 shrink-0">-{usage.amount}</span>
-                        </div>
-                      ))}
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-2 styled-scrollbars">
+                      {safeUsage.map((usage) => {
+                        // Parse the description to get model info
+                        const description = usage.description || '';
+                        const isKreaFlux = description.includes('image:') || description.includes('Krea Flux');
+                        const isQwenEdit = description.includes('Qwen') || description.includes('edit');
+                        const isWan = description.includes('firstLastFrameVideo') || description.includes('Wan');
+                        
+                        // Extract prompt from description
+                        const promptMatch = description.match(/[""](.*?)[""]/);
+                        const prompt = promptMatch ? promptMatch[1] : description;
+                        
+                        // Get icon and model name
+                        let icon, modelName;
+                        if (isWan) {
+                          icon = <Film className="h-4 w-4 text-secondary" />;
+                          modelName = 'Wan 2.2';
+                        } else if (isQwenEdit) {
+                          icon = <Wand2 className="h-4 w-4 text-accent" />;
+                          modelName = 'Qwen Edit';
+                        } else {
+                          icon = <ImageIcon className="h-4 w-4 text-primary" />;
+                          modelName = 'Krea Flux';
+                        }
+                        
+                        // Format date
+                        const date = new Date(usage.created_at);
+                        const timeAgo = getTimeAgo(date);
+                        
+                        return (
+                          <div
+                            key={usage.id}
+                            className="flex items-start gap-3 p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                          >
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                              {icon}
+                            </div>
+                            <div className="flex-grow min-w-0">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <span className="font-medium text-sm text-foreground/90">{modelName}</span>
+                                <span className="font-bold text-sm text-destructive/90">-{usage.amount}</span>
+                              </div>
+                              <p className="text-xs text-muted-foreground truncate" title={prompt}>
+                                {prompt.length > 40 ? prompt.substring(0, 40) + '...' : prompt}
+                              </p>
+                              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground/70">
+                                <Clock className="h-3 w-3" />
+                                <span>{timeAgo}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </>

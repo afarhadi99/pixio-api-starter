@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, AlertCircle, Image as LucideImage, Film, Sparkles, Upload, X } from 'lucide-react';
-import { generateMedia, checkMediaStatus } from '@/lib/actions/media.actions';
+import { generateMedia } from '@/lib/actions/media.actions';
 import { toast } from 'sonner';
 import Image from 'next/image';
 import { MediaType, MediaStatus, GenerationMode, CREDIT_COSTS } from '@/lib/constants/media';
@@ -25,11 +25,14 @@ interface MediaGenerationFormProps {
   onGenerationStart?: (mediaId: string) => void;
 }
 
+// Import Pixio models for proper handling
+import { PIXIO_MODELS } from '@/lib/pixio-api';
+
 // Helper function for direct Supabase upload
 async function uploadDirectlyToSupabase(
     file: File,
     userId: string,
-    type: 'start' | 'end'
+    type: 'start' | 'end' | 'image1'
 ): Promise<{ success: boolean; url?: string; error?: string }> {
     if (!file || !userId) {
         return { success: false, error: 'User ID and file are required.' };
@@ -97,23 +100,44 @@ export function MediaGenerationForm({
   const [endImageUrl, setEndImageUrl] = useState<string | null>(null);
   const [startImagePreview, setStartImagePreview] = useState<string | null>(null);
   const [endImagePreview, setEndImagePreview] = useState<string | null>(null);
+  
+  // Qwen Edit specific states
+  const [image1File, setImage1File] = useState<File | null>(null);
+  const [image1Url, setImage1Url] = useState<string | null>(null);
+  const [image1Preview, setImage1Preview] = useState<string | null>(null);
+  const [image2File, setImage2File] = useState<File | null>(null);
+  const [image2Url, setImage2Url] = useState<string | null>(null);
+  const [image2Preview, setImage2Preview] = useState<string | null>(null);
+  const [image3File, setImage3File] = useState<File | null>(null);
+  const [image3Url, setImage3Url] = useState<string | null>(null);
+  const [image3Preview, setImage3Preview] = useState<string | null>(null);
+  const [positivePrompt, setPositivePrompt] = useState('');
+  const [negativePrompt, setNegativePrompt] = useState('');
+
+  // Krea Flux specific states
+  const [width, setWidth] = useState(1024);
+  const [height, setHeight] = useState(1024);
+
+  // Wan 2.2 specific states
+  const [videoWidth, setVideoWidth] = useState(512);
+  const [videoHeight, setVideoHeight] = useState(512);
+  const [videoLength, setVideoLength] = useState(81);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isPolling, setIsPolling] = useState(false);
-  const [pollingMediaId, setPollingMediaId] = useState<string | null>(null);
+  const [currentMediaId, setCurrentMediaId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewStatus, setPreviewStatus] = useState<MediaStatus | 'idle'>('idle');
-  const [pollFailCount, setPollFailCount] = useState(0); // Track consecutive failed polls
-
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const startFileInputRef = useRef<HTMLInputElement>(null);
   const endFileInputRef = useRef<HTMLInputElement>(null);
-  const [userId, setUserId] = useState<string | null>(null); // State for user ID
+  const image1FileInputRef = useRef<HTMLInputElement>(null);
+  const image2FileInputRef = useRef<HTMLInputElement>(null);
+  const image3FileInputRef = useRef<HTMLInputElement>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  const supabase = createClient(); // Initialize client for getting user ID
+  const supabase = createClient(); // Initialize client for user ID and Realtime
 
   // Get user ID on mount
-   useEffect(() => {
+  useEffect(() => {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUserId(user?.id || null);
@@ -122,145 +146,139 @@ export function MediaGenerationForm({
     getUser();
   }, [supabase]);
 
+  // Determine actual media type based on model category
+  const getMediaType = (): MediaType => {
+    if (generationMode === 'image') return 'image'; // Krea Flux → image
+    if (generationMode === 'video') return 'image';  // Qwen Edit → image (it's editing, not video generation)
+    if (generationMode === 'firstLastFrameVideo') return 'video'; // Wan 2.2 → video
+    return 'image'; // Default
+  };
+  const generatedMediaType: MediaType = getMediaType();
 
-  const generatedMediaType: MediaType = generationMode === 'image' ? 'image' : 'video';
+  // Realtime subscription for media status updates
+  useEffect(() => {
+    if (!currentMediaId) return;
+
+    console.log(`[MediaGenerationForm] Setting up Realtime for media: ${currentMediaId}`);
+    
+    const channel = supabase
+      .channel(`generation-${currentMediaId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'generated_media',
+          filter: `id=eq.${currentMediaId}`
+        },
+        (payload) => {
+          console.log('[MediaGenerationForm] Realtime update:', payload);
+          const updated = payload.new as any;
+          
+          setPreviewStatus(updated.status);
+
+          if (updated.status === 'completed') {
+            setPreviewUrl(updated.media_url);
+            toast.success(`${generatedMediaType} generation complete!`);
+          } else if (updated.status === 'failed') {
+            const errorMsg = updated.metadata?.error || 'Generation failed';
+            toast.error(`Generation failed: ${errorMsg}`);
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log(`[MediaGenerationForm] Realtime SUBSCRIBED for ${currentMediaId}`);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[MediaGenerationForm] Realtime CHANNEL_ERROR');
+          toast.error('Connection error. Please refresh if status doesn\'t update.');
+        }
+      });
+
+    // Cleanup on unmount or when currentMediaId changes
+    return () => {
+      console.log(`[MediaGenerationForm] Unsubscribing from Realtime for ${currentMediaId}`);
+      supabase.removeChannel(channel);
+    };
+  }, [currentMediaId, supabase, generatedMediaType]);
 
   // --- Image Handling ---
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, type: 'start' | 'end') => {
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, type: 'start' | 'end' | 'image1' | 'image2' | 'image3') => {
     const file = event.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = reader.result as string;
         if (type === 'start') { setStartImageFile(file); setStartImageUrl(null); setStartImagePreview(result); }
-        else { setEndImageFile(file); setEndImageUrl(null); setEndImagePreview(result); }
+        else if (type === 'end') { setEndImageFile(file); setEndImageUrl(null); setEndImagePreview(result); }
+        else if (type === 'image1') { setImage1File(file); setImage1Url(null); setImage1Preview(result); }
+        else if (type === 'image2') { setImage2File(file); setImage2Url(null); setImage2Preview(result); }
+        else if (type === 'image3') { setImage3File(file); setImage3Url(null); setImage3Preview(result); }
       };
       reader.readAsDataURL(file);
     } else {
          if (type === 'start') { setStartImageFile(null); setStartImagePreview(null); }
-         else { setEndImageFile(null); setEndImagePreview(null); }
+         else if (type === 'end') { setEndImageFile(null); setEndImagePreview(null); }
+         else if (type === 'image1') { setImage1File(null); setImage1Preview(null); }
+         else if (type === 'image2') { setImage2File(null); setImage2Preview(null); }
+         else if (type === 'image3') { setImage3File(null); setImage3Preview(null); }
     }
   };
-  const handleImageSelection = useCallback((url: string | null, type: 'start' | 'end') => {
+  const handleImageSelection = useCallback((url: string | null, type: 'start' | 'end' | 'image1' | 'image2' | 'image3') => {
     if (type === 'start') { setStartImageUrl(url); setStartImageFile(null); setStartImagePreview(url); }
-    else { setEndImageUrl(url); setEndImageFile(null); setEndImagePreview(url); }
+    else if (type === 'end') { setEndImageUrl(url); setEndImageFile(null); setEndImagePreview(url); }
+    else if (type === 'image1') { setImage1Url(url); setImage1File(null); setImage1Preview(url); }
+    else if (type === 'image2') { setImage2Url(url); setImage2File(null); setImage2Preview(url); }
+    else if (type === 'image3') { setImage3Url(url); setImage3File(null); setImage3Preview(url); }
   }, []);
-  const clearImage = (type: 'start' | 'end') => {
+  const clearImage = (type: 'start' | 'end' | 'image1' | 'image2' | 'image3') => {
     if (type === 'start') { setStartImageFile(null); setStartImageUrl(null); setStartImagePreview(null); if (startFileInputRef.current) startFileInputRef.current.value = ""; }
-    else { setEndImageFile(null); setEndImageUrl(null); setEndImagePreview(null); if (endFileInputRef.current) endFileInputRef.current.value = ""; }
+    else if (type === 'end') { setEndImageFile(null); setEndImageUrl(null); setEndImagePreview(null); if (endFileInputRef.current) endFileInputRef.current.value = ""; }
+    else if (type === 'image1') { setImage1File(null); setImage1Url(null); setImage1Preview(null); if (image1FileInputRef.current) image1FileInputRef.current.value = ""; }
+    else if (type === 'image2') { setImage2File(null); setImage2Url(null); setImage2Preview(null); if (image2FileInputRef.current) image2FileInputRef.current.value = ""; }
+    else if (type === 'image3') { setImage3File(null); setImage3Url(null); setImage3Preview(null); if (image3FileInputRef.current) image3FileInputRef.current.value = ""; }
   };
 
-  // --- Polling Logic (MODIFIED) ---
-  const pollMediaStatus = useCallback(async (mediaId: string) => {
-     if (!mediaId) return;
-    setIsPolling(true);
-    try {
-      const result = await checkMediaStatus(mediaId);
-      setPreviewStatus(result.status as typeof previewStatus); // Update status regardless
-
-      if (result.status === 'completed') {
-        setPreviewUrl(result.mediaUrl || null);
-        toast.success(`${generatedMediaType} generation complete!`);
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-        setIsPolling(false);
-        setPollFailCount(0); // Reset fail count on success
-      } else if (result.status === 'failed') {
-          // --- MODIFICATION START ---
-          // Check if we should retry polling after a failure
-          if (pollFailCount < 2) { // Allow 1 retry after seeing 'failed'
-              console.warn(`MediaGenerationForm: Received 'failed' status for ${mediaId}, retrying poll once more... (Attempt ${pollFailCount + 1})`);
-              setPollFailCount(prev => prev + 1);
-              if (timeoutRef.current) clearTimeout(timeoutRef.current);
-              // Retry after a slightly longer delay
-              timeoutRef.current = setTimeout(() => pollMediaStatus(mediaId), 7000);
-          } else {
-              // Stop polling after retry limit exceeded
-              console.error(`MediaGenerationForm: Received 'failed' status for ${mediaId} after retry. Stopping poll.`);
-              toast.error(`Generation failed: ${result.error || 'Unknown reason'}`);
-              if (timeoutRef.current) clearTimeout(timeoutRef.current);
-              timeoutRef.current = null;
-              setIsPolling(false);
-              setPollFailCount(0); // Reset fail count
-          }
-          // --- MODIFICATION END ---
-      } else {
-        // Still processing or pending, continue polling
-        setPollFailCount(0); // Reset fail count if status is not 'failed'
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        timeoutRef.current = setTimeout(() => pollMediaStatus(mediaId), 5000);
-      }
-    } catch (error) {
-      console.error(`Error polling status:`, error);
-      toast.error("Error checking status");
-      // Still attempt to poll again after an error during the check
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      timeoutRef.current = setTimeout(() => pollMediaStatus(mediaId), 8000); // Longer delay after error
-    }
-  }, [generatedMediaType, pollFailCount]); // Added pollFailCount dependency
-
-  // Effect to start/stop polling based on pollingMediaId
+  // Effect to reset preview if inputs change while generating
   useEffect(() => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    if (pollingMediaId) {
-        setIsPolling(true);
-        setPollFailCount(0); // Reset fail count when starting a new poll
-        // Use requestAnimationFrame to ensure state update happens before first poll
-        requestAnimationFrame(() => pollMediaStatus(pollingMediaId));
+    const hasInputs = prompt || startImageFile || endImageFile || startImageUrl || endImageUrl ||
+                      image1File || image1Url || image2File || image2Url || image3File || image3Url ||
+                      positivePrompt || negativePrompt;
+    if (hasInputs && currentMediaId) {
+      console.log("MediaGenerationForm: Inputs changed during generation, resetting preview.");
+      setCurrentMediaId(null);
+      setPreviewStatus('idle');
+      setPreviewUrl(null);
     }
-    else {
-        setIsPolling(false);
-        setPollFailCount(0); // Reset fail count when polling stops
-    }
-    // Cleanup function to clear timeout on unmount or when pollingMediaId changes
-    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
-  }, [pollingMediaId, pollMediaStatus]); // pollMediaStatus is now stable due to useCallback
-
-  // Effect to reset preview if inputs change while polling
-  useEffect(() => {
-    const hasInputs = prompt || startImageFile || endImageFile || startImageUrl || endImageUrl;
-    if (hasInputs && pollingMediaId) {
-        console.log("MediaGenerationForm: Inputs changed during polling, resetting preview.");
-        setPollingMediaId(null); // This will trigger the cleanup in the above useEffect
-        setPreviewStatus('idle');
-        setPreviewUrl(null);
-        // No need to clear timeout here, the pollingMediaId change handles it
-    }
-  }, [prompt, startImageFile, endImageFile, startImageUrl, endImageUrl, pollingMediaId]);
-
-  // General cleanup effect
-  useEffect(() => {
-    return () => {
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        setIsPolling(false); // Ensure polling stops on unmount
-        setPollFailCount(0);
-    };
-  }, []);
+  }, [prompt, startImageFile, endImageFile, startImageUrl, endImageUrl, image1File, image1Url, image2File, image2Url, image3File, image3Url, positivePrompt, negativePrompt, currentMediaId]);
 
   // --- Submission Logic ---
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!userId) { toast.error("User not identified. Please refresh."); return; }
 
-    // Validation
+    // Validation based on generation mode
     if (generationMode === 'firstLastFrameVideo') {
+      // Wan 2.2 - needs start/end images and prompt
       if (!startImageFile && !startImageUrl) { toast.error("Please provide a start image."); return; }
       if (!endImageFile && !endImageUrl) { toast.error("Please provide an end image."); return; }
       if (!prompt.trim()) { toast.error("Please enter a prompt."); return; }
-    } else {
+    } else if (generationMode === 'video') {
+      // Qwen Edit - needs at least image1
+      if (!image1File && !image1Url) { toast.error("Please provide an image to edit."); return; }
+    } else if (generationMode === 'image') {
+      // Krea Flux - needs prompt only (width/height have defaults)
       if (!prompt.trim()) { toast.error("Please enter a prompt."); return; }
     }
+    
     if (userCredits < creditCost) { toast.error("Not enough credits to generate."); return; }
 
     setIsSubmitting(true);
     setPreviewUrl(null);
     setPreviewStatus('pending');
-    setPollFailCount(0); // Reset fail count before starting
 
-    // Clear any existing polling timeout and reset polling ID
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    setPollingMediaId(null);
-    setIsPolling(false); // Explicitly set polling to false initially
+    // Clear any existing generation tracking
+    setCurrentMediaId(null);
 
     let finalStartImageUrl = startImageUrl;
     let finalEndImageUrl = endImageUrl;
@@ -297,14 +315,82 @@ export function MediaGenerationForm({
         if (!finalStartImageUrl || !finalEndImageUrl) throw new Error("Missing required image URLs after processing uploads.");
       }
 
-      // Prepare FormData
+      // Handle Qwen Edit image uploads
+      let finalImage1Url = image1Url;
+      let finalImage2Url = image2Url;
+      let finalImage3Url = image3Url;
+      
+      if (generationMode === 'video') {
+        const compressionOptions = { maxSizeMB: 0.95, maxWidthOrHeight: 1920, useWebWorker: true };
+        
+        if (image1File) {
+          let compressedFile = image1File;
+          try {
+            const compressToastId = toast.loading("Compressing image 1...");
+            compressedFile = await imageCompression(image1File, compressionOptions);
+            toast.dismiss(compressToastId);
+          } catch (error) {
+            console.error("Image 1 compression failed:", error);
+          }
+          const uploadResult = await uploadDirectlyToSupabase(compressedFile, userId, 'image1');
+          if (!uploadResult.success || !uploadResult.url) throw new Error("Failed to upload image 1.");
+          finalImage1Url = uploadResult.url;
+        }
+        
+        if (image2File) {
+          let compressedFile = image2File;
+          try {
+            const compressToastId = toast.loading("Compressing image 2...");
+            compressedFile = await imageCompression(image2File, compressionOptions);
+            toast.dismiss(compressToastId);
+          } catch (error) {
+            console.error("Image 2 compression failed:", error);
+          }
+          const uploadResult = await uploadDirectlyToSupabase(compressedFile, userId, 'image1');
+          if (!uploadResult.success || !uploadResult.url) throw new Error("Failed to upload image 2.");
+          finalImage2Url = uploadResult.url;
+        }
+        
+        if (image3File) {
+          let compressedFile = image3File;
+          try {
+            const compressToastId = toast.loading("Compressing image 3...");
+            compressedFile = await imageCompression(image3File, compressionOptions);
+            toast.dismiss(compressToastId);
+          } catch (error) {
+            console.error("Image 3 compression failed:", error);
+          }
+          const uploadResult = await uploadDirectlyToSupabase(compressedFile, userId, 'image1');
+          if (!uploadResult.success || !uploadResult.url) throw new Error("Failed to upload image 3.");
+          finalImage3Url = uploadResult.url;
+        }
+      }
+
+      // Prepare FormData with mode-specific data
       const formData = new FormData();
-      formData.append('prompt', prompt);
       formData.append('generationMode', generationMode);
       formData.append('mediaType', generatedMediaType);
-      if (generationMode === 'firstLastFrameVideo') {
+      
+      if (generationMode === 'image') {
+        // Krea Flux
+        formData.append('prompt', prompt);
+        formData.append('width', width.toString());
+        formData.append('height', height.toString());
+      } else if (generationMode === 'video') {
+        // Qwen Edit
+        formData.append('image1Url', finalImage1Url!);
+        formData.append('positivePrompt', positivePrompt);
+        formData.append('negativePrompt', negativePrompt);
+        if (finalImage2Url) formData.append('image2Url', finalImage2Url);
+        if (finalImage3Url) formData.append('image3Url', finalImage3Url);
+      } else if (generationMode === 'firstLastFrameVideo') {
+        // Wan 2.2
+        formData.append('prompt', prompt);
         formData.append('startImageUrl', finalStartImageUrl!);
         formData.append('endImageUrl', finalEndImageUrl!);
+        formData.append('width', videoWidth.toString());
+        formData.append('height', videoHeight.toString());
+        formData.append('length', videoLength.toString());
       }
 
       // Call server action
@@ -313,34 +399,66 @@ export function MediaGenerationForm({
       if (!result.success || !result.mediaId) {
         toast.error(result.error || 'Failed to start generation');
         setPreviewStatus('failed');
-        setIsPolling(false); // Ensure polling is off
       } else {
-        toast.info(`Your ${generatedMediaType} generation has started! Checking status...`);
-        setPollingMediaId(result.mediaId); // This will trigger the useEffect to start polling
+        toast.info(`Your ${generatedMediaType} generation has started!`);
+        setCurrentMediaId(result.mediaId); // This will trigger Realtime subscription
         if (onGenerationStart) onGenerationStart(result.mediaId);
       }
     } catch (error: any) {
       console.error(`Submission error:`, error);
       toast.error(error.message || 'An unexpected error occurred during submission.');
       setPreviewStatus('failed');
-      setIsPolling(false); // Ensure polling is off on error
-      setPollingMediaId(null); // Clear polling ID on error
+      setCurrentMediaId(null);
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  const isLoading = isSubmitting || isPolling; // Simplified loading state
+  const isLoading = isSubmitting || (currentMediaId !== null && previewStatus === 'processing');
   const isFirstLastMode = generationMode === 'firstLastFrameVideo';
+  const isQwenEdit = generationMode === 'video';
+  const isKreaFlux = generationMode === 'image';
 
   // --- Render Image Input Helper ---
-  const renderImageInput = (type: 'start' | 'end') => {
-    const previewSrc = type === 'start' ? startImagePreview : endImagePreview;
-    const fileInputRef = type === 'start' ? startFileInputRef : endFileInputRef;
-    const selectedUrl = type === 'start' ? startImageUrl : endImageUrl;
+  const renderImageInput = (type: 'start' | 'end' | 'image1' | 'image2' | 'image3', required: boolean = true) => {
+    let previewSrc, fileInputRef, selectedUrl, label;
+    
+    switch(type) {
+      case 'start':
+        previewSrc = startImagePreview;
+        fileInputRef = startFileInputRef;
+        selectedUrl = startImageUrl;
+        label = 'Start Image';
+        break;
+      case 'end':
+        previewSrc = endImagePreview;
+        fileInputRef = endFileInputRef;
+        selectedUrl = endImageUrl;
+        label = 'End Image';
+        break;
+      case 'image1':
+        previewSrc = image1Preview;
+        fileInputRef = image1FileInputRef;
+        selectedUrl = image1Url;
+        label = 'Primary Image';
+        break;
+      case 'image2':
+        previewSrc = image2Preview;
+        fileInputRef = image2FileInputRef;
+        selectedUrl = image2Url;
+        label = 'Reference Image 2 (Optional)';
+        break;
+      case 'image3':
+        previewSrc = image3Preview;
+        fileInputRef = image3FileInputRef;
+        selectedUrl = image3Url;
+        label = 'Reference Image 3 (Optional)';
+        break;
+    }
+    
     return (
       <div className="space-y-2">
-        <Label htmlFor={`${type}-image-input`} className="text-base font-medium text-foreground/90"> {type === 'start' ? 'Start Image' : 'End Image'} </Label>
+        <Label htmlFor={`${type}-image-input`} className="text-base font-medium text-foreground/90">{label}</Label>
         <div className="flex items-center gap-2">
            <Input id={`${type}-image-input`} ref={fileInputRef} type="file" accept="image/png, image/jpeg, image/webp, image/gif" onChange={(e) => handleFileChange(e, type)} className="hidden" disabled={isLoading}/>
            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isLoading} className="glass-input bg-white/5 border-white/15 hover:bg-white/10 text-foreground/80 flex-grow"> <Upload className="mr-2 h-4 w-4" /> Upload </Button>
@@ -367,12 +485,82 @@ export function MediaGenerationForm({
       {/* Form Section */}
       <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }} className="space-y-5">
         <form onSubmit={handleSubmit} className="space-y-5">
-          {isFirstLastMode && ( <> {renderImageInput('start')} {renderImageInput('end')} </> )}
-          <div>
-            <Label htmlFor={`${generationMode}-prompt`} className="block text-base font-medium mb-2 text-foreground/90"> {isFirstLastMode ? 'Describe the transition or style' : 'Enter your prompt'} </Label>
-            <Textarea id={`${generationMode}-prompt`} placeholder={isFirstLastMode ? 'e.g., "Smooth transition..."' : `Describe the ${generatedMediaType}...`} value={prompt} onChange={(e) => setPrompt(e.target.value)} disabled={isLoading} rows={isFirstLastMode ? 3 : 7} className="resize-none glass-input bg-white/5 border-white/15 focus:border-primary/60 focus:ring-primary/30 focus:ring-2 transition-all text-base p-3 rounded-lg"/>
-          </div>
-          <Button type="submit" disabled={isLoading || !userId || userCredits < creditCost || (isFirstLastMode ? (!startImageFile && !startImageUrl) || (!endImageFile && !endImageUrl) || !prompt.trim() : !prompt.trim())} className="w-full glass-button bg-gradient-to-r from-primary to-secondary text-white hover:opacity-95 hover:shadow-lg transition-all duration-300 shadow-md text-lg py-3 font-semibold">
+          
+          {/* Krea Flux Inputs (Image Generation) */}
+          {isKreaFlux && (
+            <>
+              <div>
+                <Label htmlFor="prompt" className="block text-base font-medium mb-2 text-foreground/90">Image Description</Label>
+                <Textarea id="prompt" placeholder="Describe the image you want to create..." value={prompt} onChange={(e) => setPrompt(e.target.value)} disabled={isLoading} rows={5} className="resize-none glass-input bg-white/5 border-white/15 focus:border-primary/60 focus:ring-primary/30 focus:ring-2 transition-all text-base p-3 rounded-lg"/>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="width" className="block text-sm font-medium mb-2 text-foreground/90">Width</Label>
+                  <Input type="number" id="width" value={width} onChange={(e) => setWidth(parseInt(e.target.value) || 1024)} min={512} max={2048} step={64} disabled={isLoading} className="glass-input bg-white/5 border-white/15"/>
+                </div>
+                <div>
+                  <Label htmlFor="height" className="block text-sm font-medium mb-2 text-foreground/90">Height</Label>
+                  <Input type="number" id="height" value={height} onChange={(e) => setHeight(parseInt(e.target.value) || 1024)} min={512} max={2048} step={64} disabled={isLoading} className="glass-input bg-white/5 border-white/15"/>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Qwen Edit Inputs (Image Editing) */}
+          {isQwenEdit && (
+            <>
+              {renderImageInput('image1', true)}
+              {renderImageInput('image2', false)}
+              {renderImageInput('image3', false)}
+              <div>
+                <Label htmlFor="positive" className="block text-base font-medium mb-2 text-foreground/90">Positive Prompt (Optional)</Label>
+                <Textarea id="positive" placeholder="Describe what you want to see or enhance..." value={positivePrompt} onChange={(e) => setPositivePrompt(e.target.value)} disabled={isLoading} rows={3} className="resize-none glass-input bg-white/5 border-white/15 focus:border-primary/60 focus:ring-primary/30 focus:ring-2 transition-all text-base p-3 rounded-lg"/>
+              </div>
+              <div>
+                <Label htmlFor="negative" className="block text-base font-medium mb-2 text-foreground/90">Negative Prompt (Optional)</Label>
+                <Textarea id="negative" placeholder="Describe what to avoid..." value={negativePrompt} onChange={(e) => setNegativePrompt(e.target.value)} disabled={isLoading} rows={2} className="resize-none glass-input bg-white/5 border-white/15 focus:border-primary/60 focus:ring-primary/30 focus:ring-2 transition-all text-base p-3 rounded-lg"/>
+              </div>
+            </>
+          )}
+
+          {/* Wan 2.2 Inputs (First/Last Frame Video) */}
+          {isFirstLastMode && (
+            <>
+              {renderImageInput('start', true)}
+              {renderImageInput('end', true)}
+              <div>
+                <Label htmlFor="prompt" className="block text-base font-medium mb-2 text-foreground/90">Positive Prompt</Label>
+                <Textarea id="prompt" placeholder="e.g., 'car crashes through the wall and man comes into the frame screaming'" value={prompt} onChange={(e) => setPrompt(e.target.value)} disabled={isLoading} rows={3} className="resize-none glass-input bg-white/5 border-white/15 focus:border-primary/60 focus:ring-primary/30 focus:ring-2 transition-all text-base p-3 rounded-lg"/>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="videoWidth" className="block text-sm font-medium mb-2 text-foreground/90">Width</Label>
+                  <Input type="number" id="videoWidth" value={videoWidth} onChange={(e) => setVideoWidth(parseInt(e.target.value) || 512)} min={256} max={1024} step={64} disabled={isLoading} className="glass-input bg-white/5 border-white/15"/>
+                </div>
+                <div>
+                  <Label htmlFor="videoHeight" className="block text-sm font-medium mb-2 text-foreground/90">Height</Label>
+                  <Input type="number" id="videoHeight" value={videoHeight} onChange={(e) => setVideoHeight(parseInt(e.target.value) || 512)} min={256} max={1024} step={64} disabled={isLoading} className="glass-input bg-white/5 border-white/15"/>
+                </div>
+                <div>
+                  <Label htmlFor="videoLength" className="block text-sm font-medium mb-2 text-foreground/90">Length (frames)</Label>
+                  <Input type="number" id="videoLength" value={videoLength} onChange={(e) => setVideoLength(parseInt(e.target.value) || 81)} min={25} max={200} step={1} disabled={isLoading} className="glass-input bg-white/5 border-white/15"/>
+                </div>
+              </div>
+            </>
+          )}
+
+          <Button
+            type="submit"
+            disabled={
+              isLoading ||
+              !userId ||
+              userCredits < creditCost ||
+              (isKreaFlux && !prompt.trim()) ||
+              (isQwenEdit && !image1File && !image1Url) ||
+              (isFirstLastMode && ((!startImageFile && !startImageUrl) || (!endImageFile && !endImageUrl) || !prompt.trim()))
+            }
+            className="w-full glass-button bg-gradient-to-r from-primary to-secondary text-white hover:opacity-95 hover:shadow-lg transition-all duration-300 shadow-md text-lg py-3 font-semibold"
+          >
             {isLoading ? ( <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> {isSubmitting ? 'Starting...' : 'Generating...'}</> ) : ( <><Sparkles className="mr-2 h-5 w-5" /> Generate ({creditCost} credits)</> )}
           </Button>
         </form>
