@@ -26,11 +26,6 @@ export const siteMetadata: Metadata = {
     telephone: false,
   },
   
-  // Appearance
-  themeColor: [
-    { media: '(prefers-color-scheme: dark)', color: '#0c0a13' },
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' }
-  ],
   colorScheme: 'light dark',
   viewport: {
     width: 'device-width',
