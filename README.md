@@ -256,9 +256,9 @@ NEXT_PUBLIC_STRIPE_PRICE_CREDIT_PACK_5000=price_your_5000_credits_price_id
 
 # Pixio API Configuration (Server-side only - NEVER expose these to client)
 COMFY_DEPLOY_API_KEY=YOUR_PIXIO_API_KEY
-DEPLOYMENT_ID_KREA_FLUX=3d9bb06d-af94-4247-9c29-b6dc7789f820
-DEPLOYMENT_ID_QWEN_EDIT=5a152b3b-2b07-4f9f-81e0-d394b9fbd6a3
-DEPLOYMENT_ID_WAN_FIRST_LAST=8c463102-0525-4cf1-8535-731fee0f93b4
+DEPLOYMENT_ID_KREA_FLUX=
+DEPLOYMENT_ID_QWEN_EDIT=
+DEPLOYMENT_ID_WAN_FIRST_LAST=
 
 # Application URL (Important for redirects and webhooks)
 # Use ngrok URL for local development with webhooks
