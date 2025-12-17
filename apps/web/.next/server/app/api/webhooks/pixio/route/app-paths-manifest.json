@@ -1,0 +1,3 @@
+{
+  "/api/webhooks/pixio/route": "app/api/webhooks/pixio/route.js"
+}

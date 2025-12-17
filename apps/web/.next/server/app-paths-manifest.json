@@ -1,0 +1,9 @@
+{
+  "/(app)/account/page": "app/(app)/account/page.js",
+  "/(app)/dashboard/page": "app/(app)/dashboard/page.js",
+  "/(auth)/login/page": "app/(auth)/login/page.js",
+  "/(marketing)/page": "app/(marketing)/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/webhooks/pixio/route": "app/api/webhooks/pixio/route.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js"
+}

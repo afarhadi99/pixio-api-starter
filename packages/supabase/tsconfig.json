@@ -1,0 +1,10 @@
+{
+    "extends": "../../tooling/typescript/base.json",
+    "compilerOptions": {
+        "outDir": "dist",
+        "rootDir": "src"
+    },
+    "include": [
+        "src"
+    ]
+}

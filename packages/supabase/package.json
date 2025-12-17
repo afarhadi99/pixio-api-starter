@@ -1,0 +1,24 @@
+{
+    "name": "@repo/supabase",
+    "version": "0.1.0",
+    "private": true,
+    "main": "./src/lib/index.ts",
+    "types": "./src/lib/index.ts",
+    "exports": {
+        ".": "./src/lib/index.ts",
+        "./server": "./src/lib/server.ts",
+        "./client": "./src/lib/client.ts",
+        "./middleware": "./src/lib/middleware.ts",
+        "./admin": "./src/lib/admin.ts",
+        "./subscriptions": "./src/lib/subscriptions.ts"
+    },
+    "dependencies": {
+        "@supabase/ssr": "^0.6.1",
+        "@supabase/supabase-js": "^2.49.4"
+    },
+    "devDependencies": {
+        "@repo/typescript-config": "*",
+        "typescript": "^5.7.2",
+        "@types/node": "^20"
+    }
+}

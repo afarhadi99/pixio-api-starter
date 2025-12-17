@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 23, "column": 0}, "map": {"version":3,"sources":["turbopack:///[project]/apps/web/src/middleware.ts"],"sourcesContent":["// src/middleware.ts\r\nimport { type NextRequest } from 'next/server';\r\nimport { updateSession } from '@/lib/supabase/middleware';\r\n\r\nexport async function middleware(request: NextRequest) {\r\n  return await updateSession(request);\r\n}\r\n\r\nexport const config = {\r\n  matcher: [\r\n    '/((?!_next/static|_next/image|favicon.ico|.*\\\\.svg$).*)',\r\n  ],\r\n};\r\n"],"names":[],"mappings":"AAAA,oBAAoB;;;;;;;;;;;AAIb,eAAe,WAAW,OAAoB;IACnD,OAAO,MAAM,cAAc;AAC7B;AAEO,MAAM,SAAS;IACpB,SAAS;QACP;KACD;AACH"}}]
+}
