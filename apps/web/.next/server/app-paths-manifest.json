@@ -1,0 +1,18 @@
+{
+  "/api/purchase-credits/route": "app/api/purchase-credits/route.js",
+  "/api/webhooks/pixio/route": "app/api/webhooks/pixio/route.js",
+  "/api/check-session-status/route": "app/api/check-session-status/route.js",
+  "/api/webhooks/stripe/route": "app/api/webhooks/stripe/route.js",
+  "/api/create-customer-portal/route": "app/api/create-customer-portal/route.js",
+  "/auth/callback/route": "app/auth/callback/route.js",
+  "/api/create-checkout-session/route": "app/api/create-checkout-session/route.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/(app)/dashboard/page": "app/(app)/dashboard/page.js",
+  "/(auth)/signup/page": "app/(auth)/signup/page.js",
+  "/(marketing)/pricing/page": "app/(marketing)/pricing/page.js",
+  "/(marketing)/page": "app/(marketing)/page.js",
+  "/(auth)/login/page": "app/(auth)/login/page.js",
+  "/(app)/account/page": "app/(app)/account/page.js",
+  "/(app)/premium/page": "app/(app)/premium/page.js"
+}

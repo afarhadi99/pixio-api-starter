@@ -9,7 +9,7 @@ catalog:
   react-dom: 19.0.0
   next: 15.3.8
   typescript: 5.9.3
-  zod: 3.24.2
+  zod: 3.25.76
 
   # Supabase
   '@supabase/supabase-js': 2.49.4

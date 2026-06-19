@@ -44,6 +44,13 @@ const eslintConfig = [
 
       // Warn instead of error for prefer-const
       "prefer-const": "warn",
+
+      // The codebase intentionally uses `any` in several integration points
+      // (Stripe/Supabase payloads). Keep parity with @pixio/eslint-config.
+      "@typescript-eslint/no-explicit-any": "off",
+
+      // Allow literal apostrophes/quotes in copy.
+      "react/no-unescaped-entities": "off",
     }
   },
 
