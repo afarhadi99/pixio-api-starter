@@ -1,0 +1,27 @@
+{
+  "name": "@pixio/generation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./pixio": "./src/pixio-api.ts",
+    "./media": "./src/media.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@pixio/credits": "workspace:*",
+    "@pixio/database": "workspace:*",
+    "@supabase/supabase-js": "catalog:"
+  },
+  "devDependencies": {
+    "@pixio/tsconfig": "workspace:*",
+    "@pixio/eslint-config": "workspace:*",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -1,8 +1,27 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules
+**/node_modules
 /.pnp
+
+# monorepo
+.turbo
+**/.turbo
+dist
+**/dist
+
+# expo / react native
+apps/mobile/.expo
+**/.expo
+*.orig.*
+web-build/
+
+# test artifacts
+**/coverage
+**/playwright-report
+**/test-results
+**/.maestro/logs
 .pnp.*
 .yarn/*
 !.yarn/patches

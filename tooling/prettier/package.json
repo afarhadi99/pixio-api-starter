@@ -1,0 +1,13 @@
+{
+  "name": "@pixio/prettier-config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs"
+  },
+  "dependencies": {
+    "prettier": "catalog:"
+  }
+}

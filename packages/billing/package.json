@@ -1,0 +1,26 @@
+{
+  "name": "@pixio/billing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@pixio/config": "workspace:*",
+    "@pixio/credits": "workspace:*",
+    "@pixio/database": "workspace:*",
+    "stripe": "catalog:"
+  },
+  "devDependencies": {
+    "@pixio/tsconfig": "workspace:*",
+    "@pixio/eslint-config": "workspace:*",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

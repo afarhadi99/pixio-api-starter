@@ -1,0 +1,63 @@
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "ui": "stream",
+  "globalDependencies": ["**/.env", "**/.env.local"],
+  "globalEnv": [
+    "NODE_ENV",
+    "NEXT_PUBLIC_SITE_URL",
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY",
+    "NEXT_PUBLIC_STRIPE_PRICE_PRO_YEARLY",
+    "NEXT_PUBLIC_STRIPE_PRICE_BUSINESS_MONTHLY",
+    "NEXT_PUBLIC_STRIPE_PRICE_BUSINESS_YEARLY",
+    "NEXT_PUBLIC_STRIPE_PRICE_CREDIT_PACK_1000",
+    "NEXT_PUBLIC_STRIPE_PRICE_CREDIT_PACK_2500",
+    "NEXT_PUBLIC_STRIPE_PRICE_CREDIT_PACK_5000",
+    "PIXIO_DEPLOY_API_KEY",
+    "COMFY_DEPLOY_API_KEY",
+    "PIXIO_WEBHOOK_SECRET",
+    "DEPLOYMENT_ID_KREA_FLUX",
+    "DEPLOYMENT_ID_QWEN_EDIT",
+    "DEPLOYMENT_ID_WAN_FIRST_LAST",
+    "EXPO_PUBLIC_SUPABASE_URL",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY",
+    "EXPO_PUBLIC_API_URL",
+    "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"
+  ],
+  "tasks": {
+    "topo": {
+      "dependsOn": ["^topo"]
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**", "next-env.d.ts"]
+    },
+    "dev": {
+      "persistent": true,
+      "cache": false
+    },
+    "lint": {
+      "dependsOn": ["^topo"]
+    },
+    "typecheck": {
+      "dependsOn": ["^topo", "^build"],
+      "outputs": ["node_modules/.cache/tsbuildinfo.json"]
+    },
+    "test": {
+      "dependsOn": ["^topo"],
+      "outputs": ["coverage/**"]
+    },
+    "test:e2e": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}
