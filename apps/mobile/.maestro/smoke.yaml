@@ -1,0 +1,30 @@
+# Maestro E2E smoke flow. Run against a dev build (not Expo Go, since the
+# Stripe native module is required):
+#   maestro test apps/mobile/.maestro/smoke.yaml
+appId: ai.pixio.mobile
+---
+- launchApp:
+    clearState: true
+- assertVisible: 'Welcome back'
+# Sign in (uses a seeded test account)
+- tapOn:
+    id: 'login-email'
+- inputText: '${MAESTRO_TEST_EMAIL}'
+- tapOn:
+    id: 'login-password'
+- inputText: '${MAESTRO_TEST_PASSWORD}'
+- tapOn:
+    id: 'login-submit'
+# Land on the Generate tab
+- assertVisible: 'Generate'
+- tapOn:
+    id: 'generate-prompt'
+- inputText: 'a neon city at night'
+- tapOn:
+    id: 'generate-submit'
+- assertVisible: 'Generating'
+# Navigate the tabs
+- tapOn: 'Assets'
+- tapOn: 'Settings'
+- assertVisible: 'Credits'
+- assertVisible: 'Subscription'

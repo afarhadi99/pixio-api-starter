@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Pixio",
+    "slug": "pixio-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "pixio",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ai.pixio.mobile"
+    },
+    "android": {
+      "package": "ai.pixio.mobile",
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.ai.pixio.mobile",
+          "enableGooglePay": true
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
