@@ -27,6 +27,8 @@ async function authedFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return json as T;
 }
 
+import type { GenerateParams } from '@pixio/generation';
+
 export interface NativePaymentParams {
   paymentIntentClientSecret: string;
   ephemeralKey: string;
@@ -46,7 +48,7 @@ export const api = {
         }>,
     ),
 
-  generate: (params: Record<string, unknown>) =>
+  generate: (params: GenerateParams) =>
     authedFetch<{ success: boolean; mediaId?: string; error?: string }>('/api/mobile/generate', {
       method: 'POST',
       body: JSON.stringify(params),
@@ -66,4 +68,15 @@ export const api = {
 
   openPortal: () =>
     authedFetch<{ url: string }>('/api/mobile/portal', { method: 'POST', body: '{}' }),
+
+  deleteMedia: (mediaId: string) =>
+    authedFetch<{ success: boolean; error?: string }>(`/api/mobile/media/${mediaId}`, {
+      method: 'DELETE',
+    }),
+
+  cancelGeneration: (mediaId: string) =>
+    authedFetch<{ success: boolean; error?: string }>('/api/mobile/generate', {
+      method: 'DELETE',
+      body: JSON.stringify({ mediaId }),
+    }),
 };

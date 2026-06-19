@@ -1,7 +1,7 @@
 # Maestro E2E smoke flow. Run against a dev build (not Expo Go, since the
 # Stripe native module is required):
 #   maestro test apps/mobile/.maestro/smoke.yaml
-appId: ai.pixio.mobile
+appId: com.mytsi.pixiolite
 ---
 - launchApp:
     clearState: true

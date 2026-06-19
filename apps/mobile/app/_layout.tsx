@@ -11,7 +11,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <StripeProvider
         publishableKey={ENV.stripePublishableKey}
-        merchantIdentifier="merchant.ai.pixio.mobile"
+        merchantIdentifier="merchant.com.mytsi.pixiolite"
       >
         <AuthProvider>
           <StatusBar style="light" />
@@ -19,6 +19,7 @@ export default function RootLayout() {
             <Stack.Screen name="index" />
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="media/[id]" options={{ presentation: 'modal' }} />
           </Stack>
         </AuthProvider>
       </StripeProvider>

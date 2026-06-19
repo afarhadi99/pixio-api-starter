@@ -5,8 +5,8 @@ packages:
 
 catalog:
   # Core
-  react: 19.0.0
-  react-dom: 19.0.0
+  react: 19.2.3
+  react-dom: 19.2.3
   next: 15.3.8
   typescript: 5.9.3
   zod: 3.25.76
@@ -22,8 +22,8 @@ catalog:
 
   # Tooling / types
   '@types/node': 20.19.0
-  '@types/react': 19.0.0
-  '@types/react-dom': 19.0.0
+  '@types/react': 19.2.17
+  '@types/react-dom': 19.2.3
   eslint: 9.18.0
   prettier: 3.4.2
   vitest: 2.1.8

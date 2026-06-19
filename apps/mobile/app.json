@@ -1,18 +1,17 @@
 {
   "expo": {
-    "name": "Pixio",
-    "slug": "pixio-mobile",
+    "name": "Pixio Lite",
+    "slug": "pixiolite",
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "pixio",
+    "scheme": "pixiolite",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "ai.pixio.mobile"
+      "bundleIdentifier": "com.mytsi.pixiolite"
     },
     "android": {
-      "package": "ai.pixio.mobile",
+      "package": "com.mytsi.pixiolite",
       "edgeToEdgeEnabled": true
     },
     "web": {
@@ -22,16 +21,19 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      "expo-glass-effect",
       [
         "@stripe/stripe-react-native",
         {
-          "merchantIdentifier": "merchant.ai.pixio.mobile",
+          "merchantIdentifier": "merchant.com.mytsi.pixiolite",
           "enableGooglePay": true
         }
-      ]
+      ],
+      "expo-status-bar"
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "reactCompiler": true
     }
   }
 }

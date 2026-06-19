@@ -4,8 +4,9 @@ import { PIXIO_MODELS } from '@pixio/generation/pixio';
 import { Button, Card, Field, Heading, Muted, Screen } from '@/components/ui';
 import { useCredits } from '@/lib/hooks';
 import { api } from '@/lib/api';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, spacing } from '@/lib/theme';
 
+/** Image model on mobile — same Krea Flux model as the web dashboard default. */
 const model = PIXIO_MODELS.kreaFlux;
 
 export default function GenerateScreen() {
@@ -20,7 +21,12 @@ export default function GenerateScreen() {
     }
     setSubmitting(true);
     try {
-      const res = await api.generate({ mode: 'image', prompt, width: 1024, height: 1024 });
+      const res = await api.generate({
+        mode: 'image',
+        prompt,
+        width: 1024,
+        height: 1024,
+      });
       if (res.success) {
         setPrompt('');
         Alert.alert('Generating', 'Your image is being created — check the Assets tab.');
@@ -74,7 +80,8 @@ export default function GenerateScreen() {
 
         <Pressable>
           <Muted>
-            Tip: image editing and video models are available on the web app and via the API.
+            Uses the same {model.name} model as the web app. Open any asset to view, regenerate,
+            download, share, or delete.
           </Muted>
         </Pressable>
       </ScrollView>
@@ -85,10 +92,10 @@ export default function GenerateScreen() {
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   creditPill: {
-    backgroundColor: colors.card,
-    borderColor: colors.cardBorder,
+    backgroundColor: colors.surfaceElevated,
+    borderColor: colors.border,
     borderWidth: 1,
-    borderRadius: radius.lg,
+    borderRadius: 20,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
   },

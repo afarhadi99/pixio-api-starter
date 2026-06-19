@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -10,6 +11,7 @@ import {
   type ViewProps,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Surface } from '@/components/surface';
 import { colors, radius, spacing } from '@/lib/theme';
 
 export function Screen({ children, style, ...rest }: ViewProps) {
@@ -24,9 +26,9 @@ export function Screen({ children, style, ...rest }: ViewProps) {
 
 export function Card({ children, style, ...rest }: ViewProps) {
   return (
-    <View style={[styles.card, style]} {...rest}>
+    <Surface variant="card" style={[styles.card, style]} {...rest}>
       {children}
-    </View>
+    </Surface>
   );
 }
 
@@ -34,8 +36,12 @@ export function Heading({ children }: { children: React.ReactNode }) {
   return <Text style={styles.heading}>{children}</Text>;
 }
 
-export function Muted({ children }: { children: React.ReactNode }) {
-  return <Text style={styles.muted}>{children}</Text>;
+export function Muted({ children, numberOfLines }: { children: React.ReactNode; numberOfLines?: number }) {
+  return (
+    <Text style={styles.muted} numberOfLines={numberOfLines}>
+      {children}
+    </Text>
+  );
 }
 
 export function Button({
@@ -60,10 +66,16 @@ export function Button({
       accessibilityRole="button"
       onPress={onPress}
       disabled={isDisabled}
+      android_ripple={
+        Platform.OS === 'android' && !isDisabled
+          ? { color: colors.ripple, borderless: false }
+          : undefined
+      }
       style={({ pressed }) => [
         styles.button,
         variant === 'ghost' && styles.buttonGhost,
         variant === 'danger' && styles.buttonDanger,
+        Platform.OS === 'android' && variant === 'primary' && styles.buttonElevation,
         (pressed || isDisabled) && styles.buttonPressed,
       ]}
     >
@@ -79,7 +91,13 @@ export function Button({
 }
 
 export function Field(props: TextInputProps) {
-  return <TextInput placeholderTextColor={colors.textMuted} style={styles.input} {...props} />;
+  return (
+    <TextInput
+      placeholderTextColor={colors.textMuted}
+      style={styles.input}
+      {...props}
+    />
+  );
 }
 
 export function Loading() {
@@ -95,10 +113,6 @@ const styles = StyleSheet.create({
   screenInner: { flex: 1, padding: spacing.md },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
   card: {
-    backgroundColor: colors.card,
-    borderColor: colors.cardBorder,
-    borderWidth: 1,
-    borderRadius: radius.md,
     padding: spacing.md,
     marginBottom: spacing.md,
   },
@@ -112,14 +126,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.cardBorder },
-  buttonDanger: { backgroundColor: colors.danger },
+  buttonElevation: { elevation: 4 },
+  buttonGhost: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.border,
+    elevation: 0,
+  },
+  buttonDanger: { backgroundColor: colors.danger, elevation: 4 },
   buttonPressed: { opacity: 0.7 },
   buttonText: { color: colors.primaryText, fontWeight: '600', fontSize: 16 },
   buttonGhostText: { color: colors.text },
   input: {
-    backgroundColor: colors.card,
-    borderColor: colors.cardBorder,
+    backgroundColor: colors.surfaceElevated,
+    borderColor: colors.border,
     borderWidth: 1,
     borderRadius: radius.md,
     color: colors.text,
