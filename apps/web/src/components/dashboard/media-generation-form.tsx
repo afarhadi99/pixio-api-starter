@@ -11,6 +11,7 @@ import { generateMedia } from '@/lib/actions/media.actions';
 import { toast } from 'sonner';
 import Image from 'next/image';
 import { MediaType, MediaStatus, GenerationMode, CREDIT_COSTS } from '@/lib/constants/media';
+import { dispatchGenerationStarted } from '@/lib/constants/media-events';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ImageSelectorPopover } from './image-selector-popover';
 import imageCompression from 'browser-image-compression';
@@ -402,6 +403,7 @@ export function MediaGenerationForm({
       } else {
         toast.info(`Your ${generatedMediaType} generation has started!`);
         setCurrentMediaId(result.mediaId); // This will trigger Realtime subscription
+        dispatchGenerationStarted(result.mediaId);
         if (onGenerationStart) onGenerationStart(result.mediaId);
       }
     } catch (error: any) {

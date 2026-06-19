@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react'; // Added useRef
-import { fetchUserMedia, deleteMedia, cancelGeneration } from '@/lib/actions/media.actions';
+import { deleteMedia, cancelGeneration } from '@/lib/actions/media.actions';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { ImageIcon, VideoIcon, Loader2, Calendar, Download, Copy, Check, AlertCircle, Trash2, Library, Film, XCircle } from 'lucide-react';
@@ -10,6 +10,10 @@ import Image from 'next/image';
 import { toast } from 'sonner';
 import { GeneratedMedia } from '@/types/db_types';
 import { MediaType } from '@/lib/constants/media';
+import {
+  GENERATION_STARTED_EVENT,
+  type GenerationStartedDetail,
+} from '@/lib/constants/media-events';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
@@ -30,12 +34,54 @@ interface MediaLibraryProps {
   initialMedia?: GeneratedMedia[];
 }
 
+function sortMedia(items: GeneratedMedia[]): GeneratedMedia[] {
+  return [...items].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
+}
+
+function mergeMediaRow(current: GeneratedMedia[], row: GeneratedMedia): GeneratedMedia[] {
+  const index = current.findIndex((item) => item.id === row.id);
+  if (index === -1) return sortMedia([row, ...current]);
+  const next = [...current];
+  next[index] = row;
+  return sortMedia(next);
+}
+
 export function MediaLibrary({ initialMedia = [] }: MediaLibraryProps) {
   const [media, setMedia] = useState<GeneratedMedia[]>(initialMedia);
   const [activeTab, setActiveTab] = useState<'all' | MediaType>('all');
   const supabase = createClient();
   const [userId, setUserId] = useState<string | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
+
+  const upsertMediaRow = useCallback((row: GeneratedMedia) => {
+    setMedia((current) => mergeMediaRow(current, row));
+  }, []);
+
+  const syncRecentMedia = useCallback(async () => {
+    if (!userId) return;
+    const { data, error } = await supabase
+      .from('generated_media')
+      .select('*')
+      .eq('user_id', userId)
+      .in('status', ['pending', 'processing', 'completed', 'failed'])
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      console.warn('MediaLibrary: sync fetch failed', error);
+      return;
+    }
+
+    setMedia((current) => {
+      const merged = [...current];
+      for (const row of data ?? []) {
+        if (!merged.some((item) => item.id === row.id)) merged.push(row);
+      }
+      return sortMedia(merged);
+    });
+  }, [supabase, userId]);
 
   // Get user ID on mount
   useEffect(() => {
@@ -45,6 +91,31 @@ export function MediaLibrary({ initialMedia = [] }: MediaLibraryProps) {
     };
     getUser();
   }, [supabase]);
+
+  // Immediate library update when generation starts (does not rely on Realtime)
+  useEffect(() => {
+    const handleGenerationStarted = async (event: Event) => {
+      const { mediaId } = (event as CustomEvent<GenerationStartedDetail>).detail;
+      if (!mediaId) return;
+
+      const { data, error } = await supabase
+        .from('generated_media')
+        .select('*')
+        .eq('id', mediaId)
+        .single();
+
+      if (error || !data) {
+        console.warn('MediaLibrary: could not fetch new generation row', error);
+        await syncRecentMedia();
+        return;
+      }
+
+      upsertMediaRow(data);
+    };
+
+    window.addEventListener(GENERATION_STARTED_EVENT, handleGenerationStarted);
+    return () => window.removeEventListener(GENERATION_STARTED_EVENT, handleGenerationStarted);
+  }, [supabase, syncRecentMedia, upsertMediaRow]);
 
   useEffect(() => {
     if (!userId || channelRef.current) return; // Don't subscribe if no user or already subscribed
@@ -79,8 +150,7 @@ export function MediaLibrary({ initialMedia = [] }: MediaLibraryProps) {
               updatedMedia = updatedMedia.filter(item => item.id !== oldMedia.id);
               console.log(`MediaLibrary: Deleted ${oldMedia.id}`);
             }
-            // Ensure sorting remains consistent
-            return updatedMedia.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            return sortMedia(updatedMedia);
           });
         }
       )
@@ -88,6 +158,8 @@ export function MediaLibrary({ initialMedia = [] }: MediaLibraryProps) {
         // --- MODIFIED ERROR HANDLING ---
         if (status === 'SUBSCRIBED') {
           console.log(`MediaLibrary: Realtime SUBSCRIBED for user ${userId}`);
+          // Catch rows created while the channel was connecting
+          void syncRecentMedia();
         } else if (status === 'CHANNEL_ERROR') {
           // Log more details, specifically handling undefined 'err'
           console.error(`MediaLibrary: Realtime CHANNEL_ERROR. Status: ${status}, Error:`, err ?? 'Error object is undefined');
@@ -115,7 +187,7 @@ export function MediaLibrary({ initialMedia = [] }: MediaLibraryProps) {
         channelRef.current = null; // Clear ref on cleanup
       }
     };
-  }, [supabase, userId]); // Depend only on supabase and userId
+  }, [supabase, userId, syncRecentMedia]); // Depend only on supabase and userId
 
   const handleItemDeleted = useCallback((deletedMediaId: string) => {
     setMedia((prevMedia) => prevMedia.filter(item => item.id !== deletedMediaId));
