@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { Image } from 'expo-image';
+import { ActivityIndicator, Alert, Image, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -162,7 +161,7 @@ export default function MediaDetailScreen() {
         <SettingsFrostedView style={[styles.preview, { borderColor: colors.border }]}>
           {canActOnMedia ? (
             <Pressable accessibilityRole="imagebutton" onPress={handleView} testID="media-view">
-              <Image source={{ uri: media.media_url }} style={styles.image} contentFit="contain" />
+              <Image source={{ uri: media.media_url }} style={styles.image} resizeMode="contain" />
             </Pressable>
           ) : (
             <View style={[styles.image, styles.placeholder, { backgroundColor: colors.chip }]}>

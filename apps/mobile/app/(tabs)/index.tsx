@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
+  Image,
   Platform,
   Pressable,
   StyleSheet,
@@ -10,7 +11,6 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useIsFocused } from 'expo-router/react-navigation';
@@ -329,7 +329,7 @@ function MediaTile({ item, onPress }: { item: GeneratedMedia; onPress: () => voi
     <Pressable onPress={onPress} accessibilityRole="button" style={styles.tile} testID={`asset-tile-${item.id}`}>
       <SettingsFrostedView style={[styles.tileSurface, { borderColor: colors.border }]}>
         {ready ? (
-          <Image source={{ uri: item.media_url }} style={styles.tileImage} contentFit="cover" transition={200} />
+          <Image source={{ uri: item.media_url }} style={styles.tileImage} resizeMode="cover" />
         ) : (
           <View style={[styles.tileImage, styles.tilePlaceholder, { backgroundColor: colors.chip }]}>
             <ThemedText type="smallBold" style={{ color: statusColor, textTransform: 'capitalize' }}>
@@ -413,7 +413,7 @@ function ImagePickerRow({
   return (
     <View style={styles.pickerRow}>
       {uri ? (
-        <Image source={{ uri }} style={styles.pickerThumb} contentFit="cover" />
+        <Image source={{ uri }} style={styles.pickerThumb} resizeMode="cover" />
       ) : (
         <View style={[styles.pickerThumb, styles.pickerThumbEmpty, { borderColor: colors.border }]}>
           <Ionicons name="image-outline" size={20} color={colors.textSecondary as string} />

@@ -1,5 +1,4 @@
-import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
-import { Image } from 'expo-image';
+import { FlatList, Image, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useIsFocused } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,7 +41,7 @@ function MediaTile({ item, onPress }: { item: GeneratedMedia; onPress: () => voi
     >
       <SettingsFrostedView style={[styles.tileSurface, { borderColor: colors.border }]}>
         {isReady ? (
-          <Image source={{ uri: item.media_url }} style={styles.image} contentFit="cover" transition={200} />
+          <Image source={{ uri: item.media_url }} style={styles.image} resizeMode="cover" />
         ) : (
           <View style={[styles.image, styles.placeholder, { backgroundColor: colors.chip }]}>
             <ThemedText type="smallBold" style={{ color: statusColor }}>
