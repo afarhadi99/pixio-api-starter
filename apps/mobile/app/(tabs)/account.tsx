@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Linking, ScrollView, StyleSheet, View } from 'react-native';
+import { useIsFocused } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { CreditPack } from '@pixio/config';
 import { getCreditsByTier, getTierById } from '@pixio/config';
@@ -11,6 +12,7 @@ import { CreditsBalanceCard } from '@/components/settings/credits-balance-card';
 import { SubscriptionSummaryCard } from '@/components/settings/subscription-summary-card';
 import { AccountSettingsCard } from '@/components/settings/account-settings-card';
 import type { CreditsBalanceSummary, SubscriptionSummary } from '@/components/settings/settings.types';
+import { useAppBottomMenuNativeScrollHandler } from '@/components/options/app-bottom-menu-state';
 import { useAuth } from '@/lib/auth';
 import { useCredits, useSubscription } from '@/lib/hooks';
 import { usePayments } from '@/lib/payments';
@@ -21,6 +23,8 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
+  const onScroll = useAppBottomMenuNativeScrollHandler(isFocused);
   const { user, signOut } = useAuth();
   const { subscription, tier, loading: subLoading } = useSubscription();
   const {
@@ -150,6 +154,8 @@ export default function AccountScreen() {
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         contentContainerStyle={[
           styles.contentContainer,
           {

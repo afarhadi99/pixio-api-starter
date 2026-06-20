@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Alert,
+  FlatList,
   Platform,
   Pressable,
   StyleSheet,
@@ -12,7 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import Animated, { FadeIn, FadeOut, runOnJS, useAnimatedReaction } from 'react-native-reanimated';
+import { useIsFocused } from 'expo-router/react-navigation';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PIXIO_MODELS, type GenerateParams, type PixioModel } from '@pixio/generation';
 import type { GeneratedMedia } from '@pixio/database/types';
@@ -26,11 +28,14 @@ import { ModelSelectorTrigger } from '@/components/generation/model-selector-tri
 import { ModelPickerSheet } from '@/components/generation/model-picker-sheet';
 import { BottomSheet } from '@/components/generation/bottom-sheet';
 import { Button } from '@/components/primitives';
+import {
+  useAppBottomMenuNativeScrollHandler,
+  useAppBottomMenuState,
+} from '@/components/options/app-bottom-menu-state';
 import { useAuth } from '@/lib/auth';
 import { useCredits, useMedia } from '@/lib/hooks';
 import { api } from '@/lib/api';
 import { uploadInputImage } from '@/lib/upload';
-import { useScroll, useFeedScrollHandler } from '@/lib/scroll-context';
 import { AppBottomMenuInset, Spacing } from '@/constants/theme';
 
 type ModelId = 'krea-flux' | 'qwen-edit' | 'wan-first-last-frame';
@@ -69,17 +74,12 @@ export default function GenerateScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [modelPickerVisible, setModelPickerVisible] = useState(false);
   const [optionsVisible, setOptionsVisible] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
 
-  const { scrollY } = useScroll();
-  const scrollHandler = useFeedScrollHandler();
-  // Collapse the composer into compact circular buttons once scrolled down.
-  useAnimatedReaction(
-    () => scrollY.value > 70,
-    (cur, prev) => {
-      if (cur !== prev) runOnJS(setCollapsed)(cur);
-    },
-  );
+  // Drive the composer collapse off the shared bottom-menu compact state, so
+  // the header + bottom menu collapse together on scroll (Pixio behaviour).
+  const isFocused = useIsFocused();
+  const onFeedScroll = useAppBottomMenuNativeScrollHandler(isFocused);
+  const { compact: collapsed } = useAppBottomMenuState();
 
   const composerPad = insets.top + 140;
 
@@ -176,12 +176,12 @@ export default function GenerateScreen() {
   return (
     <ScreenShell>
       {/* Feed of generations */}
-      <Animated.FlatList
+      <FlatList
         data={media}
         keyExtractor={(m: GeneratedMedia) => m.id}
         numColumns={2}
         showsVerticalScrollIndicator={false}
-        onScroll={scrollHandler}
+        onScroll={onFeedScroll}
         scrollEventThrottle={16}
         contentContainerStyle={{
           paddingTop: composerPad + Spacing.three,

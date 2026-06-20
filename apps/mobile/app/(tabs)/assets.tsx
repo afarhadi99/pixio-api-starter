@@ -1,7 +1,7 @@
-import { Pressable, RefreshControl, StyleSheet, View } from 'react-native';
-import Animated from 'react-native-reanimated';
+import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
+import { useIsFocused } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { GeneratedMedia } from '@pixio/database/types';
 
@@ -13,7 +13,7 @@ import { useSettingsColors } from '@/components/settings/settings-colors';
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useMedia } from '@/lib/hooks';
-import { useFeedScrollHandler } from '@/lib/scroll-context';
+import { useAppBottomMenuNativeScrollHandler } from '@/components/options/app-bottom-menu-state';
 
 const statusLabel: Record<string, string> = {
   completed: 'Done',
@@ -63,15 +63,16 @@ export default function AssetsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const colors = useSettingsColors();
-  const scrollHandler = useFeedScrollHandler();
+  const isFocused = useIsFocused();
+  const onScroll = useAppBottomMenuNativeScrollHandler(isFocused);
 
   return (
     <ScreenShell>
-      <Animated.FlatList
+      <FlatList
         data={media}
         keyExtractor={(m: GeneratedMedia) => m.id}
         numColumns={2}
-        onScroll={scrollHandler}
+        onScroll={onScroll}
         scrollEventThrottle={16}
         columnWrapperStyle={{ gap: Spacing.three, paddingHorizontal: Spacing.three }}
         contentContainerStyle={{
