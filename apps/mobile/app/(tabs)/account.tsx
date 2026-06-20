@@ -1,178 +1,204 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { PricingTier, CreditPack } from '@pixio/config';
+import type { CreditPack } from '@pixio/config';
+import { getCreditsByTier, getTierById } from '@pixio/config';
 
 import { ScreenShell } from '@/components/screen-shell';
+import { SETTINGS_SYMBOLS } from '@/components/settings/settings.constants';
 import { SettingsHero } from '@/components/settings/settings-hero';
-import { SettingsCard } from '@/components/settings/settings-card';
-import { useSettingsColors } from '@/components/settings/settings-colors';
-import { ThemedText } from '@/components/themed-text';
-import { Button } from '@/components/primitives';
+import { CreditsBalanceCard } from '@/components/settings/credits-balance-card';
+import { SubscriptionSummaryCard } from '@/components/settings/subscription-summary-card';
+import { AccountSettingsCard } from '@/components/settings/account-settings-card';
+import type { CreditsBalanceSummary, SubscriptionSummary } from '@/components/settings/settings.types';
 import { useAuth } from '@/lib/auth';
 import { useCredits, useSubscription } from '@/lib/hooks';
 import { usePayments } from '@/lib/payments';
 import { api } from '@/lib/api';
-import { BottomTabInset, Spacing } from '@/constants/theme';
+import { ENV } from '@/lib/env';
+import { supabase } from '@/lib/supabase';
+import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 
 export default function AccountScreen() {
-  const colors = useSettingsColors();
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
-  const { subscription, tier, refresh: refreshSub } = useSubscription();
-  const { subscription: subCredits, purchased, total, refresh: refreshCredits } = useCredits();
-  const { buyCreditPack, subscribe } = usePayments();
+  const { subscription, tier, loading: subLoading } = useSubscription();
+  const {
+    subscription: subCredits,
+    purchased,
+    total,
+    loading: creditsLoading,
+    refresh: refreshCredits,
+  } = useCredits();
+  const { buyCreditPack } = usePayments();
 
-  const [tiers, setTiers] = useState<PricingTier[]>([]);
   const [packs, setPacks] = useState<CreditPack[]>([]);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   useEffect(() => {
     api
       .getConfig()
-      .then((c) => {
-        setTiers(c.tiers.filter((t) => t.id !== 'free'));
-        setPacks(c.creditPacks);
-      })
+      .then((c) => setPacks(c.creditPacks))
       .catch(() => {});
   }, []);
 
-  const afterPurchase = async (
-    label: string,
-    run: () => Promise<{ status: string; error?: string }>,
-  ) => {
-    setBusy(label);
-    const res = await run();
-    setBusy(null);
-    if (res.status === 'completed') {
-      Alert.alert('Success', 'Payment complete. Your account will update shortly.');
-      setTimeout(() => {
-        refreshCredits();
-        refreshSub();
-      }, 1500);
-    } else if (res.status === 'failed') {
-      Alert.alert('Payment failed', res.error ?? 'Please try again.');
+  const creditsBalance: CreditsBalanceSummary = useMemo(
+    () => ({
+      total,
+      recurringCurrent: subCredits,
+      recurringQuota: getCreditsByTier(tier),
+      permanent: purchased,
+      resetText: subscription?.current_period_end
+        ? `Monthly credits renew ${new Date(subscription.current_period_end).toLocaleDateString()}`
+        : undefined,
+    }),
+    [total, subCredits, purchased, tier, subscription?.current_period_end],
+  );
+
+  const subscriptionSummary: SubscriptionSummary = useMemo(() => {
+    const tierData = getTierById(tier);
+    const productName = subscription?.prices?.products?.name ?? tierData?.name ?? 'Free';
+    const interval = subscription?.prices?.interval;
+    return {
+      productName,
+      productDescription: tierData?.description,
+      statusText: subscription?.status
+        ? subscription.status.charAt(0).toUpperCase() + subscription.status.slice(1)
+        : tier === 'free'
+          ? 'Free plan'
+          : undefined,
+      intervalText: interval ? `${interval === 'year' ? 'Yearly' : 'Monthly'}` : undefined,
+      renewalText: subscription?.current_period_end
+        ? `Renews ${new Date(subscription.current_period_end).toLocaleDateString()}`
+        : undefined,
+    };
+  }, [subscription, tier]);
+
+  const handleBuyMore = () => {
+    if (packs.length === 0) {
+      Alert.alert('Credits unavailable', 'Credit packs are not configured.');
+      return;
     }
+    Alert.alert(
+      'Buy credits',
+      'Choose a credit pack',
+      [
+        ...packs.map((p) => ({
+          text: `${p.name} · $${(p.price / 100).toFixed(0)}`,
+          onPress: async () => {
+            if (!p.priceId) return;
+            const res = await buyCreditPack(p.priceId);
+            if (res.status === 'completed') {
+              Alert.alert('Success', 'Payment complete. Your credits will update shortly.');
+              setTimeout(refreshCredits, 1500);
+            } else if (res.status === 'failed') {
+              Alert.alert('Payment failed', res.error ?? 'Please try again.');
+            }
+          },
+        })),
+        { text: 'Cancel', style: 'cancel' as const },
+      ],
+    );
   };
 
-  const openPortal = async () => {
+  const handleShowLedger = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('credit_usage')
+      .select('amount, description, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    if (!data || data.length === 0) {
+      Alert.alert('Credit history', 'No credit usage yet.');
+      return;
+    }
+    const body = data
+      .map((r) => `${new Date(r.created_at).toLocaleDateString()}  −${r.amount}  ${r.description ?? ''}`)
+      .join('\n');
+    Alert.alert('Recent credit usage', body);
+  };
+
+  const openManageSubscription = async () => {
     try {
       const { url } = await api.openPortal();
       Linking.openURL(url);
     } catch (e: any) {
-      Alert.alert('Could not open billing portal', e.message);
+      Alert.alert('Could not open billing', e.message);
+    }
+  };
+
+  const openAccountSettings = () => {
+    const base = ENV.apiUrl?.replace(/\/$/, '');
+    if (base) Linking.openURL(`${base}/account`);
+    else openManageSubscription();
+  };
+
+  const handleSignOut = async () => {
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+    try {
+      await signOut();
+    } catch {
+      Alert.alert('Unable to log out', 'Please try again in a moment.');
+      setIsSigningOut(false);
     }
   };
 
   return (
     <ScreenShell>
       <ScrollView
+        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingTop: insets.top + Spacing.four,
-          paddingHorizontal: Spacing.three,
-          paddingBottom: insets.bottom + BottomTabInset + Spacing.four,
-          gap: Spacing.three,
-        }}
+        contentContainerStyle={[
+          styles.contentContainer,
+          {
+            paddingTop: insets.top + Spacing.five,
+            paddingBottom: insets.bottom + BottomTabInset + Spacing.four,
+          },
+        ]}
       >
-        <SettingsHero title="Account" subtitle={user?.email ?? 'Manage your plan and credits.'} symbol="account" />
+        <View style={styles.content}>
+          <SettingsHero
+            title="Account"
+            subtitle="Billing, subscription, and account in one place — with native checkout built in."
+            symbol={SETTINGS_SYMBOLS.account}
+          />
 
-        {/* Credits */}
-        <SettingsCard title="Credits" symbol="billing" tone="primary" eyebrow={`${total.toLocaleString()} total`}>
-          <Row label="Subscription" value={subCredits.toLocaleString()} />
-          <Row label="Purchased" value={purchased.toLocaleString()} />
-        </SettingsCard>
+          <View style={styles.section}>
+            <CreditsBalanceCard
+              balance={creditsBalance}
+              isLoading={creditsLoading}
+              onBuyMore={handleBuyMore}
+              onShowLedger={handleShowLedger}
+            />
+          </View>
 
-        {/* Subscription */}
-        <SettingsCard title="Subscription" symbol="subscription" tone="tertiary" eyebrow={tier.toUpperCase()}>
-          {subscription?.current_period_end ? (
-            <Row label="Renews" value={new Date(subscription.current_period_end).toLocaleDateString()} />
-          ) : (
-            <ThemedText type="small" style={{ color: colors.textSecondary }}>
-              You're on the free plan.
-            </ThemedText>
-          )}
-          {tier !== 'free' ? (
-            <Button title="Manage subscription" variant="ghost" onPress={openPortal} />
-          ) : null}
-        </SettingsCard>
+          <View style={styles.section}>
+            <SubscriptionSummaryCard
+              subscription={subscriptionSummary}
+              isLoading={subLoading}
+              onManageSubscription={openManageSubscription}
+            />
+          </View>
 
-        {/* Plans */}
-        {tiers.length > 0 ? (
-          <SettingsCard title="Plans" symbol="subscription" tone="secondary">
-            {tiers.map((t) => {
-              const priceId = t.pricing.monthly.priceId;
-              const current = tier === t.id;
-              return (
-                <View key={t.id} style={styles.planRow}>
-                  <View style={{ flex: 1 }}>
-                    <ThemedText type="smallBold" style={{ color: colors.text }}>
-                      {t.name}
-                    </ThemedText>
-                    <ThemedText type="small" style={{ color: colors.textSecondary }}>
-                      ${((t.pricing.monthly.amount ?? 0) / 100).toFixed(0)}/mo · {t.credits} credits
-                    </ThemedText>
-                  </View>
-                  <Button
-                    title={current ? 'Current' : 'Subscribe'}
-                    disabled={current || !priceId}
-                    loading={busy === `sub-${t.id}`}
-                    onPress={() => priceId && afterPurchase(`sub-${t.id}`, () => subscribe(priceId))}
-                  />
-                </View>
-              );
-            })}
-          </SettingsCard>
-        ) : null}
-
-        {/* Buy credits */}
-        {packs.length > 0 ? (
-          <SettingsCard title="Buy credits" symbol="buyMore" tone="primary">
-            {packs.map((p) => (
-              <View key={p.id} style={styles.planRow}>
-                <View style={{ flex: 1 }}>
-                  <ThemedText type="smallBold" style={{ color: colors.text }}>
-                    {p.name}
-                  </ThemedText>
-                  <ThemedText type="small" style={{ color: colors.textSecondary }}>
-                    ${(p.price / 100).toFixed(0)}
-                  </ThemedText>
-                </View>
-                <Button
-                  title="Buy"
-                  disabled={!p.priceId}
-                  loading={busy === `pack-${p.id}`}
-                  onPress={() => p.priceId && afterPurchase(`pack-${p.id}`, () => buyCreditPack(p.priceId))}
-                />
-              </View>
-            ))}
-          </SettingsCard>
-        ) : null}
-
-        {/* Account */}
-        <SettingsCard title="Account" symbol="account" tone="neutral" description={user?.email ?? undefined}>
-          <Button title="Sign out" variant="danger" onPress={signOut} testID="sign-out" />
-        </SettingsCard>
+          <View style={styles.section}>
+            <AccountSettingsCard
+              email={user?.email ?? undefined}
+              onOpenAccountSettings={openAccountSettings}
+              onSignOut={handleSignOut}
+              isSigningOut={isSigningOut}
+            />
+          </View>
+        </View>
       </ScrollView>
     </ScreenShell>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  const colors = useSettingsColors();
-  return (
-    <View style={styles.row}>
-      <ThemedText type="small" style={{ color: colors.textSecondary }}>
-        {label}
-      </ThemedText>
-      <ThemedText type="smallBold" style={{ color: colors.text }}>
-        {value}
-      </ThemedText>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  planRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  scrollView: { flex: 1 },
+  contentContainer: { alignItems: 'center' },
+  content: { width: '100%', maxWidth: MaxContentWidth, gap: Spacing.four, paddingHorizontal: Spacing.three },
+  section: { gap: 0 },
 });

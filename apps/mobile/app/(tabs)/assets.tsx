@@ -6,6 +6,7 @@ import type { GeneratedMedia } from '@pixio/database/types';
 
 import { ScreenShell } from '@/components/screen-shell';
 import { SettingsHero } from '@/components/settings/settings-hero';
+import { SETTINGS_SYMBOLS } from '@/components/settings/settings.constants';
 import { SettingsFrostedView } from '@/components/settings/settings-frosted-view';
 import { useSettingsColors } from '@/components/settings/settings-colors';
 import { ThemedText } from '@/components/themed-text';
@@ -78,7 +79,7 @@ export default function AssetsScreen() {
             <SettingsHero
               title="Assets"
               subtitle="Everything you've generated, updated live as renders finish."
-              symbol="assets"
+              symbol={SETTINGS_SYMBOLS.assets}
             />
           </View>
         }

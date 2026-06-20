@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 
 import { useSettingsColors } from './settings-colors';
-import { SETTINGS_SYMBOLS } from './settings.constants';
+import type { SettingsSymbolName } from './settings.constants';
 import { SettingsFrostedView } from './settings-frosted-view';
 import { SettingsSymbolBadge } from './settings-symbol-badge';
 import { settingsCardStyles } from './settings-card.styles';
@@ -13,7 +13,7 @@ type SettingsCardProps = {
   eyebrow?: string;
   title: string;
   description?: string;
-  symbol?: keyof typeof SETTINGS_SYMBOLS;
+  symbol?: SettingsSymbolName;
   tone?: 'primary' | 'secondary' | 'tertiary' | 'neutral';
   children?: React.ReactNode;
 };
@@ -35,7 +35,7 @@ export function SettingsCard(props: SettingsCardProps) {
           <View style={settingsCardStyles.titleRow}>
             {symbol ? (
               <SettingsSymbolBadge
-                name={SETTINGS_SYMBOLS[symbol]}
+                name={symbol}
                 tintColor={toneStyles.symbolTint}
                 backgroundColor={toneStyles.symbolBackground}
               />

@@ -5,7 +5,7 @@ import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 
-import { SETTINGS_SYMBOLS } from './settings.constants';
+import type { SettingsSymbolName } from './settings.constants';
 import { useSettingsColors } from './settings-colors';
 import { SettingsFrostedView } from './settings-frosted-view';
 import { SettingsSymbolBadge } from './settings-symbol-badge';
@@ -13,7 +13,7 @@ import { SettingsSymbolBadge } from './settings-symbol-badge';
 type SettingsHeroProps = {
   title: string;
   subtitle: string;
-  symbol: keyof typeof SETTINGS_SYMBOLS;
+  symbol: SettingsSymbolName;
 };
 
 export function SettingsHero({ title, subtitle, symbol }: SettingsHeroProps) {
@@ -29,7 +29,7 @@ export function SettingsHero({ title, subtitle, symbol }: SettingsHeroProps) {
         style={styles.titleRow}
       >
         <SettingsSymbolBadge
-          name={SETTINGS_SYMBOLS[symbol]}
+          name={symbol}
           size={22}
           tintColor={colors.onPrimaryContainer}
           backgroundColor={colors.primaryContainer}
