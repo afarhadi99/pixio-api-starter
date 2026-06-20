@@ -7,7 +7,6 @@ import type { GeneratedMedia } from '@pixio/database/types';
 import { ScreenShell } from '@/components/screen-shell';
 import { SettingsHero } from '@/components/settings/settings-hero';
 import { SETTINGS_SYMBOLS } from '@/components/settings/settings.constants';
-import { SettingsFrostedView } from '@/components/settings/settings-frosted-view';
 import { useSettingsColors } from '@/components/settings/settings-colors';
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
@@ -39,7 +38,7 @@ function MediaTile({ item, onPress }: { item: GeneratedMedia; onPress: () => voi
       style={styles.tile}
       testID={`asset-tile-${item.id}`}
     >
-      <SettingsFrostedView style={[styles.tileSurface, { borderColor: colors.border }]}>
+      <View style={[styles.tileSurface, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {isReady ? (
           <Image source={{ uri: item.media_url }} style={styles.image} resizeMode="cover" />
         ) : (
@@ -52,7 +51,7 @@ function MediaTile({ item, onPress }: { item: GeneratedMedia; onPress: () => voi
         <ThemedText type="small" numberOfLines={1} style={[styles.caption, { color: colors.textSecondary }]}>
           {item.prompt || 'Untitled'}
         </ThemedText>
-      </SettingsFrostedView>
+      </View>
     </Pressable>
   );
 }

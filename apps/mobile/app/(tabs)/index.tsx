@@ -327,7 +327,7 @@ function MediaTile({ item, onPress }: { item: GeneratedMedia; onPress: () => voi
     item.status === 'completed' ? colors.positive : item.status === 'failed' ? colors.negative : colors.primary;
   return (
     <Pressable onPress={onPress} accessibilityRole="button" style={styles.tile} testID={`asset-tile-${item.id}`}>
-      <SettingsFrostedView style={[styles.tileSurface, { borderColor: colors.border }]}>
+      <View style={[styles.tileSurface, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {ready ? (
           <Image source={{ uri: item.media_url }} style={styles.tileImage} resizeMode="cover" />
         ) : (
@@ -340,7 +340,7 @@ function MediaTile({ item, onPress }: { item: GeneratedMedia; onPress: () => voi
         <ThemedText type="small" numberOfLines={1} style={{ color: colors.textSecondary, marginTop: Spacing.one }}>
           {item.prompt || 'Untitled'}
         </ThemedText>
-      </SettingsFrostedView>
+      </View>
     </Pressable>
   );
 }
