@@ -16,15 +16,20 @@ export function useCredits() {
 
   const refresh = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from('users')
-      .select('subscription_credits, purchased_credits')
-      .eq('id', user.id)
-      .single();
-    const subscription = data?.subscription_credits ?? 0;
-    const purchased = data?.purchased_credits ?? 0;
-    setCredits({ subscription, purchased, total: subscription + purchased });
-    setLoading(false);
+    try {
+      const { data } = await supabase
+        .from('users')
+        .select('subscription_credits, purchased_credits')
+        .eq('id', user.id)
+        .single();
+      const subscription = data?.subscription_credits ?? 0;
+      const purchased = data?.purchased_credits ?? 0;
+      setCredits({ subscription, purchased, total: subscription + purchased });
+    } catch (e) {
+      console.warn('[useCredits] failed to load credits', e);
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
 
   useEffect(() => {
@@ -57,6 +62,8 @@ export function useMedia() {
     try {
       const rows = await getUserMedia(supabase, user.id);
       setMedia(rows);
+    } catch (e) {
+      console.warn('[useMedia] failed to load media', e);
     } finally {
       setLoading(false);
     }

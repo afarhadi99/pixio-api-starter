@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   Alert,
-  FlatList,
   Platform,
   Pressable,
   StyleSheet,
@@ -13,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, runOnJS, useAnimatedReaction } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PIXIO_MODELS, type GenerateParams, type PixioModel } from '@pixio/generation';
 import type { GeneratedMedia } from '@pixio/database/types';
@@ -31,6 +30,7 @@ import { useAuth } from '@/lib/auth';
 import { useCredits, useMedia } from '@/lib/hooks';
 import { api } from '@/lib/api';
 import { uploadInputImage } from '@/lib/upload';
+import { useScroll, useFeedScrollHandler } from '@/lib/scroll-context';
 import { AppBottomMenuInset, Spacing } from '@/constants/theme';
 
 type ModelId = 'krea-flux' | 'qwen-edit' | 'wan-first-last-frame';
@@ -69,7 +69,19 @@ export default function GenerateScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [modelPickerVisible, setModelPickerVisible] = useState(false);
   const [optionsVisible, setOptionsVisible] = useState(false);
-  const [composerHeight, setComposerHeight] = useState(150);
+  const [collapsed, setCollapsed] = useState(false);
+
+  const { scrollY } = useScroll();
+  const scrollHandler = useFeedScrollHandler();
+  // Collapse the composer into compact circular buttons once scrolled down.
+  useAnimatedReaction(
+    () => scrollY.value > 70,
+    (cur, prev) => {
+      if (cur !== prev) runOnJS(setCollapsed)(cur);
+    },
+  );
+
+  const composerPad = insets.top + 140;
 
   const selected = useMemo(() => MODELS.find((m) => m.id === selectedId)!, [selectedId]);
   const model = selected.model;
@@ -164,19 +176,21 @@ export default function GenerateScreen() {
   return (
     <ScreenShell>
       {/* Feed of generations */}
-      <FlatList
+      <Animated.FlatList
         data={media}
-        keyExtractor={(m) => m.id}
+        keyExtractor={(m: GeneratedMedia) => m.id}
         numColumns={2}
         showsVerticalScrollIndicator={false}
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
         contentContainerStyle={{
-          paddingTop: composerHeight + Spacing.three,
+          paddingTop: composerPad + Spacing.three,
           paddingBottom: insets.bottom + AppBottomMenuInset + Spacing.four,
           paddingHorizontal: Spacing.two,
         }}
         onRefresh={refresh}
         refreshing={loading}
-        renderItem={({ item }) => (
+        renderItem={({ item }: { item: GeneratedMedia }) => (
           <MediaTile item={item} onPress={() => router.push(`/media/${item.id}`)} />
         )}
         ListEmptyComponent={
@@ -194,63 +208,76 @@ export default function GenerateScreen() {
         }
       />
 
-      {/* Floating composer */}
-      <View
-        pointerEvents="box-none"
-        style={[styles.composer, { paddingTop: insets.top + Spacing.two }]}
-        onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}
-      >
-        {/* Prompt bar */}
-        <SettingsFrostedView style={[styles.promptBar, { borderColor: colors.border }]}>
-          <Ionicons name="create-outline" size={18} color={colors.textSecondary as string} />
-          <TextInput
-            style={[styles.promptInput, { color: colors.text as string }]}
-            placeholder={selectedId === 'qwen-edit' ? 'Describe the edit…' : 'Describe what to create…'}
-            placeholderTextColor={colors.textSecondary as string}
-            value={prompt}
-            onChangeText={setPrompt}
-            multiline
-            testID="generate-prompt"
-          />
-          {prompt.length > 0 ? (
-            <TouchableOpacity onPress={() => setPrompt('')} hitSlop={8}>
-              <Ionicons name="close-circle" size={18} color={colors.textSecondary as string} />
-            </TouchableOpacity>
-          ) : null}
-        </SettingsFrostedView>
-
-        {/* Controls row */}
-        <View style={styles.controlsRow}>
-          <View style={{ flex: 1 }}>
-            <ModelSelectorTrigger
-              modelName={model.name}
-              estimatedCredits={model.creditCost}
-              onPress={() => setModelPickerVisible(true)}
-            />
-          </View>
-
-          <GlassIconButton icon="options-outline" onPress={() => setOptionsVisible(true)} iosGlass={iosGlass} />
-
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Generate"
-            testID="generate-submit"
-            disabled={submitting}
-            onPress={onGenerate}
-            activeOpacity={0.85}
-            style={[styles.generateBtn, { backgroundColor: accentColor, opacity: submitting ? 0.7 : 1 }]}
+      {/* Floating composer — collapses to circular buttons on scroll */}
+      <View pointerEvents="box-none" style={[styles.composer, { paddingTop: insets.top + Spacing.two }]}>
+        {collapsed ? (
+          <Animated.View
+            key="compact"
+            entering={FadeIn.duration(160)}
+            style={styles.collapsedRow}
+            pointerEvents="box-none"
           >
-            <Ionicons name="sparkles" size={18} color="#fff" />
-            <ThemedText type="smallBold" style={{ color: '#fff' }}>
-              {submitting ? 'Generating…' : 'Generate'}
-            </ThemedText>
-          </TouchableOpacity>
-        </View>
+            <GlassIconButton icon="options-outline" onPress={() => setOptionsVisible(true)} iosGlass={iosGlass} />
+            <CircleButton
+              accent={accentColor}
+              icon="sparkles"
+              disabled={submitting}
+              onPress={onGenerate}
+              testID="generate-submit"
+            />
+          </Animated.View>
+        ) : (
+          <Animated.View key="full" entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} pointerEvents="box-none">
+            <SettingsFrostedView style={[styles.promptBar, { borderColor: colors.border }]}>
+              <Ionicons name="create-outline" size={18} color={colors.textSecondary as string} />
+              <TextInput
+                style={[styles.promptInput, { color: colors.text as string }]}
+                placeholder={selectedId === 'qwen-edit' ? 'Describe the edit…' : 'Describe what to create…'}
+                placeholderTextColor={colors.textSecondary as string}
+                value={prompt}
+                onChangeText={setPrompt}
+                multiline
+                testID="generate-prompt"
+              />
+              {prompt.length > 0 ? (
+                <TouchableOpacity onPress={() => setPrompt('')} hitSlop={8}>
+                  <Ionicons name="close-circle" size={18} color={colors.textSecondary as string} />
+                </TouchableOpacity>
+              ) : null}
+            </SettingsFrostedView>
 
-        {/* Credit hint */}
-        <ThemedText type="small" style={{ color: colors.textSecondary, marginTop: Spacing.one }}>
-          {model.creditCost} credits · {total.toLocaleString()} available
-        </ThemedText>
+            <View style={styles.controlsRow}>
+              <View style={{ flex: 1 }}>
+                <ModelSelectorTrigger
+                  modelName={model.name}
+                  estimatedCredits={model.creditCost}
+                  onPress={() => setModelPickerVisible(true)}
+                />
+              </View>
+
+              <GlassIconButton icon="options-outline" onPress={() => setOptionsVisible(true)} iosGlass={iosGlass} />
+
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Generate"
+                testID="generate-submit"
+                disabled={submitting}
+                onPress={onGenerate}
+                activeOpacity={0.85}
+                style={[styles.generateBtn, { backgroundColor: accentColor, opacity: submitting ? 0.7 : 1 }]}
+              >
+                <Ionicons name="sparkles" size={18} color="#fff" />
+                <ThemedText type="smallBold" style={{ color: '#fff' }}>
+                  {submitting ? 'Generating…' : 'Generate'}
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+
+            <ThemedText type="small" style={{ color: colors.textSecondary, marginTop: Spacing.one }}>
+              {model.creditCost} credits · {total.toLocaleString()} available
+            </ThemedText>
+          </Animated.View>
+        )}
       </View>
 
       <ModelPickerSheet
@@ -343,6 +370,34 @@ function GlassIconButton({
   );
 }
 
+function CircleButton({
+  icon,
+  accent,
+  onPress,
+  disabled,
+  testID,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  accent: string;
+  onPress: () => void;
+  disabled?: boolean;
+  testID?: string;
+}) {
+  return (
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel="Generate"
+      testID={testID}
+      disabled={disabled}
+      onPress={onPress}
+      activeOpacity={0.85}
+      style={[styles.circleBtn, { backgroundColor: accent, opacity: disabled ? 0.6 : 1 }]}
+    >
+      <Ionicons name={icon} size={22} color="#fff" />
+    </TouchableOpacity>
+  );
+}
+
 function ImagePickerRow({
   label,
   uri,
@@ -425,6 +480,15 @@ function LabeledNumber({
 
 const styles = StyleSheet.create({
   composer: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20, paddingHorizontal: Spacing.three },
+  collapsedRow: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: Spacing.two },
+  circleBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 999,
+    borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   promptBar: {
     flexDirection: 'row',
     alignItems: 'center',

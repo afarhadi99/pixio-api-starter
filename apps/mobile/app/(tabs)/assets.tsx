@@ -1,4 +1,5 @@
-import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +13,7 @@ import { useSettingsColors } from '@/components/settings/settings-colors';
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 import { useMedia } from '@/lib/hooks';
+import { useFeedScrollHandler } from '@/lib/scroll-context';
 
 const statusLabel: Record<string, string> = {
   completed: 'Done',
@@ -61,13 +63,16 @@ export default function AssetsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const colors = useSettingsColors();
+  const scrollHandler = useFeedScrollHandler();
 
   return (
     <ScreenShell>
-      <FlatList
+      <Animated.FlatList
         data={media}
-        keyExtractor={(m) => m.id}
+        keyExtractor={(m: GeneratedMedia) => m.id}
         numColumns={2}
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
         columnWrapperStyle={{ gap: Spacing.three, paddingHorizontal: Spacing.three }}
         contentContainerStyle={{
           paddingTop: insets.top + Spacing.four,
@@ -83,7 +88,7 @@ export default function AssetsScreen() {
             />
           </View>
         }
-        renderItem={({ item }) => (
+        renderItem={({ item }: { item: GeneratedMedia }) => (
           <MediaTile item={item} onPress={() => router.push(`/media/${item.id}`)} />
         )}
         refreshControl={
