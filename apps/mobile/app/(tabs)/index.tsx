@@ -1,20 +1,23 @@
 import { useMemo, useState } from 'react';
 import {
   Alert,
-  FlatList,
   Image,
   Platform,
-  Pressable,
   StyleSheet,
   TextInput,
   TouchableOpacity,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
 import { useIsFocused } from 'expo-router/react-navigation';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import Animated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PIXIO_MODELS, type GenerateParams, type PixioModel } from '@pixio/generation';
 import type { GeneratedMedia } from '@pixio/database/types';
@@ -27,10 +30,11 @@ import { IosGlassSurface, useIosGlassEligible } from '@/components/ui/ios-glass-
 import { ModelSelectorTrigger } from '@/components/generation/model-selector-trigger';
 import { ModelPickerSheet } from '@/components/generation/model-picker-sheet';
 import { BottomSheet } from '@/components/generation/bottom-sheet';
+import { GeneratedGallery } from '@/components/gallery/generated-gallery';
 import { Button } from '@/components/primitives';
 import {
-  useAppBottomMenuNativeScrollHandler,
   useAppBottomMenuState,
+  useCompactBottomMenuOnScroll,
 } from '@/components/options/app-bottom-menu-state';
 import { useAuth } from '@/lib/auth';
 import { useCredits, useMedia } from '@/lib/hooks';
@@ -46,10 +50,14 @@ const MODELS: { id: ModelId; model: PixioModel }[] = [
   { id: 'wan-first-last-frame', model: PIXIO_MODELS.wanFirstLastFrame },
 ];
 
+// How far the feed scrolls before the composer is fully collapsed.
+const COLLAPSE_DISTANCE = 120;
+// Max height reserved for the collapsible controls (model + buttons + credits).
+const EXPANDED_AREA_MAX = 132;
+
 export default function GenerateScreen() {
   const colors = useSettingsColors();
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const iosGlass = Platform.OS === 'ios' && useIosGlassEligible();
 
   const { user } = useAuth();
@@ -67,24 +75,46 @@ export default function GenerateScreen() {
   // Krea Flux dimensions
   const [width, setWidth] = useState('1024');
   const [height, setHeight] = useState('1024');
-  // Wan 2.2 video dimensions
+  // Wan video dimensions
   const [vWidth, setVWidth] = useState('512');
   const [vHeight, setVHeight] = useState('512');
   const [vLength, setVLength] = useState('81');
   const [submitting, setSubmitting] = useState(false);
   const [modelPickerVisible, setModelPickerVisible] = useState(false);
   const [optionsVisible, setOptionsVisible] = useState(false);
+  const [promptBarHeight, setPromptBarHeight] = useState(52);
 
-  // Drive the composer collapse off the shared bottom-menu compact state, so
-  // the header + bottom menu collapse together on scroll (Pixio behaviour).
+  // Reanimated scroll position drives both the bottom-bar compact state and the
+  // composer collapse — the prompt field always stays visible (Pixio behaviour).
   const isFocused = useIsFocused();
-  const onFeedScroll = useAppBottomMenuNativeScrollHandler(isFocused);
-  const { compact: collapsed } = useAppBottomMenuState();
-
-  const composerPad = insets.top + 140;
+  const scrollY = useSharedValue(0);
+  useCompactBottomMenuOnScroll(scrollY, isFocused);
+  const { compact } = useAppBottomMenuState();
 
   const selected = useMemo(() => MODELS.find((m) => m.id === selectedId)!, [selectedId]);
   const model = selected.model;
+
+  const expandedAreaStyle = useAnimatedStyle(() => {
+    const p = Math.min(Math.max(scrollY.value / COLLAPSE_DISTANCE, 0), 1);
+    return {
+      opacity: interpolate(p, [0, 0.6], [1, 0], Extrapolation.CLAMP),
+      maxHeight: interpolate(p, [0, 1], [EXPANDED_AREA_MAX, 0], Extrapolation.CLAMP),
+      transform: [{ translateY: interpolate(p, [0, 1], [0, -8], Extrapolation.CLAMP) }],
+    };
+  });
+
+  const promptPadStyle = useAnimatedStyle(() => {
+    const p = Math.min(Math.max(scrollY.value / COLLAPSE_DISTANCE, 0), 1);
+    return { paddingRight: interpolate(p, [0, 1], [0, 92], Extrapolation.CLAMP) };
+  });
+
+  const collapsedIconsStyle = useAnimatedStyle(() => {
+    const p = Math.min(Math.max(scrollY.value / COLLAPSE_DISTANCE, 0), 1);
+    return {
+      opacity: interpolate(p, [0.55, 1], [0, 1], Extrapolation.CLAMP),
+      transform: [{ scale: interpolate(p, [0.38, 0.85], [0.6, 1], Extrapolation.CLAMP) }],
+    };
+  });
 
   const pickImage = async (setter: (uri: string) => void) => {
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
@@ -164,71 +194,43 @@ export default function GenerateScreen() {
       } else {
         Alert.alert('Generation failed', res.error ?? 'Unknown error');
       }
-    } catch (e: any) {
-      Alert.alert('Generation failed', e.message ?? 'Unexpected error');
+    } catch (e: unknown) {
+      Alert.alert('Generation failed', e instanceof Error ? e.message : 'Unexpected error');
     } finally {
       setSubmitting(false);
     }
   };
 
+  const onRegenerate = (item: GeneratedMedia) => {
+    if (item.prompt) setPrompt(item.prompt);
+    Alert.alert('Prompt loaded', 'The prompt was added to the composer. Tap Generate to create a new version.');
+  };
+
   const accentColor = colors.primary as string;
+  const contentTopPadding = insets.top + Spacing.two + promptBarHeight + Spacing.two;
 
   return (
     <ScreenShell>
-      {/* Feed of generations */}
-      <FlatList
-        data={media}
-        keyExtractor={(m: GeneratedMedia) => m.id}
-        numColumns={2}
-        showsVerticalScrollIndicator={false}
-        onScroll={onFeedScroll}
-        scrollEventThrottle={16}
-        contentContainerStyle={{
-          paddingTop: composerPad + Spacing.three,
-          paddingBottom: insets.bottom + AppBottomMenuInset + Spacing.four,
-          paddingHorizontal: Spacing.two,
-        }}
-        onRefresh={refresh}
-        refreshing={loading}
-        renderItem={({ item }: { item: GeneratedMedia }) => (
-          <MediaTile item={item} onPress={() => router.push(`/media/${item.id}`)} />
-        )}
-        ListEmptyComponent={
-          loading ? null : (
-            <Animated.View entering={FadeIn} style={styles.empty}>
-              <Ionicons name="sparkles" size={40} color={colors.textSecondary as string} />
-              <ThemedText type="smallBold" style={{ color: colors.text, marginTop: Spacing.two }}>
-                Nothing here yet
-              </ThemedText>
-              <ThemedText type="small" style={{ color: colors.textSecondary, textAlign: 'center' }}>
-                Pick a model, write a prompt, and tap Generate.
-              </ThemedText>
-            </Animated.View>
-          )
-        }
+      <GeneratedGallery
+        media={media}
+        loading={loading}
+        refresh={refresh}
+        contentTopPadding={contentTopPadding}
+        bottomInset={insets.bottom + AppBottomMenuInset}
+        scrollY={scrollY}
+        onRegenerate={onRegenerate}
+        emptyTitle="Nothing here yet"
+        emptyDescription="Pick a model, write a prompt, and tap Generate."
       />
 
-      {/* Floating composer — collapses to circular buttons on scroll */}
+      {/* Floating composer — prompt stays visible; the rest collapses on scroll */}
       <View pointerEvents="box-none" style={[styles.composer, { paddingTop: insets.top + Spacing.two }]}>
-        {collapsed ? (
-          <Animated.View
-            key="compact"
-            entering={FadeIn.duration(160)}
-            style={styles.collapsedRow}
-            pointerEvents="box-none"
-          >
-            <GlassIconButton icon="options-outline" onPress={() => setOptionsVisible(true)} iosGlass={iosGlass} />
-            <CircleButton
-              accent={accentColor}
-              icon="sparkles"
-              disabled={submitting}
-              onPress={onGenerate}
-              testID="generate-submit"
-            />
-          </Animated.View>
-        ) : (
-          <Animated.View key="full" entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} pointerEvents="box-none">
-            <SettingsFrostedView style={[styles.promptBar, { borderColor: colors.border }]}>
+        <View
+          style={styles.topRow}
+          onLayout={(e: LayoutChangeEvent) => setPromptBarHeight(Math.round(e.nativeEvent.layout.height))}
+        >
+          <SettingsFrostedView style={[styles.promptBar, { borderColor: colors.border }]}>
+            <Animated.View style={[styles.promptInner, promptPadStyle]}>
               <Ionicons name="create-outline" size={18} color={colors.textSecondary as string} />
               <TextInput
                 style={[styles.promptInput, { color: colors.text as string }]}
@@ -244,40 +246,58 @@ export default function GenerateScreen() {
                   <Ionicons name="close-circle" size={18} color={colors.textSecondary as string} />
                 </TouchableOpacity>
               ) : null}
-            </SettingsFrostedView>
+            </Animated.View>
+          </SettingsFrostedView>
 
-            <View style={styles.controlsRow}>
-              <View style={{ flex: 1 }}>
-                <ModelSelectorTrigger
-                  modelName={model.name}
-                  estimatedCredits={model.creditCost}
-                  onPress={() => setModelPickerVisible(true)}
-                />
-              </View>
+          {/* Collapsed-state controls: small Generate + options icons */}
+          <Animated.View
+            pointerEvents={compact ? 'auto' : 'none'}
+            style={[styles.collapsedIcons, collapsedIconsStyle]}
+          >
+            <SmallIconButton
+              icon="options-outline"
+              onPress={() => setOptionsVisible(true)}
+              iosGlass={iosGlass}
+            />
+            <SmallGenerateButton accent={accentColor} disabled={submitting} onPress={onGenerate} />
+          </Animated.View>
+        </View>
 
-              <GlassIconButton icon="options-outline" onPress={() => setOptionsVisible(true)} iosGlass={iosGlass} />
-
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Generate"
-                testID="generate-submit"
-                disabled={submitting}
-                onPress={onGenerate}
-                activeOpacity={0.85}
-                style={[styles.generateBtn, { backgroundColor: accentColor, opacity: submitting ? 0.7 : 1 }]}
-              >
-                <Ionicons name="sparkles" size={18} color="#fff" />
-                <ThemedText type="smallBold" style={{ color: '#fff' }}>
-                  {submitting ? 'Generating…' : 'Generate'}
-                </ThemedText>
-              </TouchableOpacity>
+        <Animated.View
+          pointerEvents={compact ? 'none' : 'auto'}
+          style={[styles.expandedArea, expandedAreaStyle]}
+        >
+          <View style={styles.controlsRow}>
+            <View style={{ flex: 1 }}>
+              <ModelSelectorTrigger
+                modelName={model.name}
+                estimatedCredits={model.creditCost}
+                onPress={() => setModelPickerVisible(true)}
+              />
             </View>
 
-            <ThemedText type="small" style={{ color: colors.textSecondary, marginTop: Spacing.one }}>
-              {model.creditCost} credits · {total.toLocaleString()} available
-            </ThemedText>
-          </Animated.View>
-        )}
+            <GlassIconButton icon="options-outline" onPress={() => setOptionsVisible(true)} iosGlass={iosGlass} />
+
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Generate"
+              testID="generate-submit"
+              disabled={submitting}
+              onPress={onGenerate}
+              activeOpacity={0.85}
+              style={[styles.generateBtn, { backgroundColor: accentColor, opacity: submitting ? 0.7 : 1 }]}
+            >
+              <Ionicons name="sparkles" size={18} color="#fff" />
+              <ThemedText type="smallBold" style={{ color: '#fff' }}>
+                {submitting ? 'Generating…' : 'Generate'}
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
+
+          <ThemedText type="small" style={{ color: colors.textSecondary, marginTop: Spacing.one }}>
+            {model.creditCost} credits · {total.toLocaleString()} available
+          </ThemedText>
+        </Animated.View>
       </View>
 
       <ModelPickerSheet
@@ -320,31 +340,6 @@ export default function GenerateScreen() {
   );
 }
 
-function MediaTile({ item, onPress }: { item: GeneratedMedia; onPress: () => void }) {
-  const colors = useSettingsColors();
-  const ready = item.media_url && item.status === 'completed';
-  const statusColor =
-    item.status === 'completed' ? colors.positive : item.status === 'failed' ? colors.negative : colors.primary;
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button" style={styles.tile} testID={`asset-tile-${item.id}`}>
-      <View style={[styles.tileSurface, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        {ready ? (
-          <Image source={{ uri: item.media_url }} style={styles.tileImage} resizeMode="cover" />
-        ) : (
-          <View style={[styles.tileImage, styles.tilePlaceholder, { backgroundColor: colors.chip }]}>
-            <ThemedText type="smallBold" style={{ color: statusColor, textTransform: 'capitalize' }}>
-              {item.status}
-            </ThemedText>
-          </View>
-        )}
-        <ThemedText type="small" numberOfLines={1} style={{ color: colors.textSecondary, marginTop: Spacing.one }}>
-          {item.prompt || 'Untitled'}
-        </ThemedText>
-      </View>
-    </Pressable>
-  );
-}
-
 function GlassIconButton({
   icon,
   onPress,
@@ -370,30 +365,51 @@ function GlassIconButton({
   );
 }
 
-function CircleButton({
+function SmallIconButton({
   icon,
-  accent,
   onPress,
-  disabled,
-  testID,
+  iosGlass,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
-  accent: string;
   onPress: () => void;
+  iosGlass: boolean;
+}) {
+  const colors = useSettingsColors();
+  return (
+    <TouchableOpacity activeOpacity={iosGlass ? 1 : 0.85} onPress={onPress}>
+      {iosGlass ? (
+        <IosGlassSurface isInteractive glassEffectStyle="clear" fallbackBackgroundColor={colors.chip} style={styles.smallButton}>
+          <Ionicons name={icon} size={18} color={colors.text as string} />
+        </IosGlassSurface>
+      ) : (
+        <View style={[styles.smallButton, { backgroundColor: colors.chip, borderColor: colors.border, borderWidth: 1 }]}>
+          <Ionicons name={icon} size={18} color={colors.text as string} />
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+function SmallGenerateButton({
+  accent,
+  disabled,
+  onPress,
+}: {
+  accent: string;
   disabled?: boolean;
-  testID?: string;
+  onPress: () => void;
 }) {
   return (
     <TouchableOpacity
       accessibilityRole="button"
       accessibilityLabel="Generate"
-      testID={testID}
+      testID="generate-submit-compact"
       disabled={disabled}
       onPress={onPress}
       activeOpacity={0.85}
-      style={[styles.circleBtn, { backgroundColor: accent, opacity: disabled ? 0.6 : 1 }]}
+      style={[styles.smallButton, { backgroundColor: accent, opacity: disabled ? 0.6 : 1 }]}
     >
-      <Ionicons name={icon} size={22} color="#fff" />
+      <Ionicons name="sparkles" size={18} color="#fff" />
     </TouchableOpacity>
   );
 }
@@ -480,19 +496,10 @@ function LabeledNumber({
 
 const styles = StyleSheet.create({
   composer: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20, paddingHorizontal: Spacing.three },
-  collapsedRow: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: Spacing.two },
-  circleBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 999,
-    borderCurve: 'continuous',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  topRow: { position: 'relative', justifyContent: 'center' },
   promptBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
     minHeight: 52,
     borderRadius: 16,
     borderCurve: 'continuous',
@@ -500,13 +507,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
   },
+  promptInner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   promptInput: { flex: 1, fontSize: 16, lineHeight: 22, maxHeight: 96, paddingTop: 0 },
+  collapsedIcons: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingRight: Spacing.one,
+  },
+  expandedArea: { overflow: 'hidden' },
   controlsRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginTop: Spacing.two },
   gearButton: { width: 48, height: 48 },
   gearInner: {
     width: 48,
     height: 48,
     borderRadius: 14,
+    borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  smallButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 999,
     borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
@@ -521,11 +549,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderCurve: 'continuous',
   },
-  empty: { alignItems: 'center', justifyContent: 'center', gap: 2, paddingVertical: 80, paddingHorizontal: Spacing.four },
-  tile: { flex: 1, padding: Spacing.one },
-  tileSurface: { borderRadius: 18, borderCurve: 'continuous', borderWidth: 1, padding: Spacing.two },
-  tileImage: { width: '100%', aspectRatio: 1, borderRadius: 12 },
-  tilePlaceholder: { alignItems: 'center', justifyContent: 'center' },
   numberRow: { flexDirection: 'row', gap: Spacing.two },
   pickerRow: { flexDirection: 'row', gap: Spacing.three, alignItems: 'center' },
   pickerThumb: { width: 64, height: 64, borderRadius: 14 },

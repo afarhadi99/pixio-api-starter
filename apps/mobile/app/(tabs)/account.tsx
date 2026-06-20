@@ -9,6 +9,7 @@ import { ScreenShell } from '@/components/screen-shell';
 import { SETTINGS_SYMBOLS } from '@/components/settings/settings.constants';
 import { SettingsHero } from '@/components/settings/settings-hero';
 import { CreditsBalanceCard } from '@/components/settings/credits-balance-card';
+import { CreditsLedgerSheet } from '@/components/settings/credits-ledger-sheet';
 import { SubscriptionSummaryCard } from '@/components/settings/subscription-summary-card';
 import { AccountSettingsCard } from '@/components/settings/account-settings-card';
 import type { CreditsBalanceSummary, SubscriptionSummary } from '@/components/settings/settings.types';
@@ -18,7 +19,6 @@ import { useCredits, useSubscription } from '@/lib/hooks';
 import { usePayments } from '@/lib/payments';
 import { api } from '@/lib/api';
 import { ENV } from '@/lib/env';
-import { supabase } from '@/lib/supabase';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 
 export default function AccountScreen() {
@@ -38,6 +38,7 @@ export default function AccountScreen() {
 
   const [packs, setPacks] = useState<CreditPack[]>([]);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [ledgerVisible, setLedgerVisible] = useState(false);
 
   useEffect(() => {
     api
@@ -105,23 +106,7 @@ export default function AccountScreen() {
     );
   };
 
-  const handleShowLedger = async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from('credit_usage')
-      .select('amount, description, created_at')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(10);
-    if (!data || data.length === 0) {
-      Alert.alert('Credit history', 'No credit usage yet.');
-      return;
-    }
-    const body = data
-      .map((r) => `${new Date(r.created_at).toLocaleDateString()}  −${r.amount}  ${r.description ?? ''}`)
-      .join('\n');
-    Alert.alert('Recent credit usage', body);
-  };
+  const handleShowLedger = () => setLedgerVisible(true);
 
   const openManageSubscription = async () => {
     try {
@@ -198,6 +183,12 @@ export default function AccountScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <CreditsLedgerSheet
+        visible={ledgerVisible}
+        onClose={() => setLedgerVisible(false)}
+        userId={user?.id}
+      />
     </ScreenShell>
   );
 }

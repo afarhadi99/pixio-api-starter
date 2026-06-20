@@ -18,6 +18,17 @@ A pnpm + Turborepo monorepo for building subscription SaaS with AI media generat
 
 See **[AGENTS.md](./AGENTS.md)** for agent/developer conventions.
 
+## Editing this project
+
+**[docs/EDITING.md](./docs/EDITING.md)** is a task-oriented guide for common changes —
+adding a generation model, rebranding the app, editing the web UI, editing the
+mobile UI, and testing on a device.
+
+Matching Claude Code subagents live in [`.claude/agents/`](./.claude/agents):
+`pixio-add-model`, `pixio-rebrand`, `pixio-web-ui`, `pixio-mobile-ui`, and the
+read-only `pixio-guide`. Ask Claude e.g. *"use the pixio-add-model agent to add a
+Flux Pro model"*. (Device testing uses the global `adb-device-testing` skill.)
+
 ## Quick start
 
 **Prerequisites:** Node ≥ 20.19, pnpm 10+, Supabase CLI, Stripe account, Pixio API key.

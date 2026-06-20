@@ -133,7 +133,7 @@ export default function LoginScreen() {
   return (
     <ScreenShell>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>

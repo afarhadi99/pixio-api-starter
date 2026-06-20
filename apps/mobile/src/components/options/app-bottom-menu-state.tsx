@@ -6,22 +6,28 @@ type AppBottomMenuState = {
   canScrollToTop: boolean;
   compact: boolean;
   reevaluateToken: number;
+  overlayOpen: boolean;
   setCompact: (compact: boolean) => void;
   expand: () => void;
   requestReevaluation: () => void;
   registerScrollToTop: (handler: () => void) => () => void;
   scrollToTop: () => void;
+  pushOverlay: () => void;
+  popOverlay: () => void;
 };
 
 const AppBottomMenuContext = React.createContext<AppBottomMenuState>({
   canScrollToTop: false,
   compact: false,
   reevaluateToken: 0,
+  overlayOpen: false,
   setCompact: () => undefined,
   expand: () => undefined,
   requestReevaluation: () => undefined,
   registerScrollToTop: () => () => undefined,
   scrollToTop: () => undefined,
+  pushOverlay: () => undefined,
+  popOverlay: () => undefined,
 });
 
 const COMPACT_SCROLL_THRESHOLD = 42;
@@ -30,8 +36,12 @@ export function AppBottomMenuProvider(props: { children: React.ReactNode }) {
   const [compact, setCompactState] = useState(false);
   const [reevaluateToken, setReevaluateToken] = useState(0);
   const [canScrollToTop, setCanScrollToTop] = useState(false);
+  const [overlayCount, setOverlayCount] = useState(0);
   const scrollToTopHandlerRef = useRef<(() => void) | null>(null);
   const scrollToTopRegistrationRef = useRef<symbol | null>(null);
+
+  const pushOverlay = useCallback(() => setOverlayCount((c) => c + 1), []);
+  const popOverlay = useCallback(() => setOverlayCount((c) => Math.max(0, c - 1)), []);
 
   const setCompact = useCallback((nextCompact: boolean) => {
     setCompactState((current) => (current === nextCompact ? current : nextCompact));
@@ -68,13 +78,28 @@ export function AppBottomMenuProvider(props: { children: React.ReactNode }) {
       canScrollToTop,
       compact,
       reevaluateToken,
+      overlayOpen: overlayCount > 0,
       setCompact,
       expand,
       requestReevaluation,
       registerScrollToTop,
       scrollToTop,
+      pushOverlay,
+      popOverlay,
     }),
-    [canScrollToTop, compact, expand, reevaluateToken, registerScrollToTop, requestReevaluation, scrollToTop, setCompact],
+    [
+      canScrollToTop,
+      compact,
+      expand,
+      overlayCount,
+      popOverlay,
+      pushOverlay,
+      reevaluateToken,
+      registerScrollToTop,
+      requestReevaluation,
+      scrollToTop,
+      setCompact,
+    ],
   );
 
   return <AppBottomMenuContext.Provider value={value}>{props.children}</AppBottomMenuContext.Provider>;

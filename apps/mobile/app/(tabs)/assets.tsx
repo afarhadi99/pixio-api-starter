@@ -1,15 +1,26 @@
-import { FlatList, Image, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import {
+  FlatList,
+  Image,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useColorScheme,
+  type LayoutChangeEvent,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useIsFocused } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { GeneratedMedia } from '@pixio/database/types';
 
 import { ScreenShell } from '@/components/screen-shell';
-import { SettingsHero } from '@/components/settings/settings-hero';
-import { SETTINGS_SYMBOLS } from '@/components/settings/settings.constants';
 import { useSettingsColors } from '@/components/settings/settings-colors';
 import { ThemedText } from '@/components/themed-text';
-import { BottomTabInset, Spacing } from '@/constants/theme';
+import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useMedia } from '@/lib/hooks';
 import { useAppBottomMenuNativeScrollHandler } from '@/components/options/app-bottom-menu-state';
 
@@ -61,53 +72,105 @@ export default function AssetsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const colors = useSettingsColors();
+  const scheme = useColorScheme();
   const isFocused = useIsFocused();
   const onScroll = useAppBottomMenuNativeScrollHandler(isFocused);
+
+  const [search, setSearch] = useState('');
+  const [headerHeight, setHeaderHeight] = useState(insets.top + 64);
+
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return media;
+    return media.filter((m) => (m.prompt ?? '').toLowerCase().includes(term));
+  }, [media, search]);
+
+  const searchFill = scheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
 
   return (
     <ScreenShell>
       <FlatList
-        data={media}
+        data={filtered}
         keyExtractor={(m: GeneratedMedia) => m.id}
         numColumns={2}
         onScroll={onScroll}
         scrollEventThrottle={16}
-        columnWrapperStyle={{ gap: Spacing.three, paddingHorizontal: Spacing.three }}
+        columnWrapperStyle={styles.column}
         contentContainerStyle={{
-          paddingTop: insets.top + Spacing.four,
+          paddingTop: headerHeight + Spacing.three,
           paddingBottom: insets.bottom + BottomTabInset + Spacing.four,
           gap: Spacing.three,
         }}
-        ListHeaderComponent={
-          <View style={{ paddingHorizontal: Spacing.three, paddingBottom: Spacing.three }}>
-            <SettingsHero
-              title="Assets"
-              subtitle="Everything you've generated, updated live as renders finish."
-              symbol={SETTINGS_SYMBOLS.assets}
-            />
-          </View>
-        }
         renderItem={({ item }: { item: GeneratedMedia }) => (
           <MediaTile item={item} onPress={() => router.push(`/media/${item.id}`)} />
         )}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.primary} />
+          <RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.primary as string} />
         }
         ListEmptyComponent={
           loading ? null : (
             <View style={{ paddingHorizontal: Spacing.three }}>
               <ThemedText type="small" style={{ color: colors.textSecondary }}>
-                No generations yet. Create one from the Generate tab.
+                {search.trim()
+                  ? 'No assets match your search.'
+                  : 'No generations yet. Create one from the Generate tab.'}
               </ThemedText>
             </View>
           )
         }
       />
+
+      {/* Pinned search bar — stays at the top while the grid scrolls under it */}
+      <View
+        onLayout={(e: LayoutChangeEvent) => setHeaderHeight(Math.round(e.nativeEvent.layout.height))}
+        style={[styles.searchHeader, { paddingTop: insets.top + Spacing.two }]}
+      >
+        <View style={[styles.searchBar, { backgroundColor: searchFill }]}>
+          <Ionicons name="search" size={20} color={colors.textSecondary as string} style={styles.searchIcon} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.text as string }]}
+            placeholder="Search assets..."
+            placeholderTextColor={colors.textSecondary as string}
+            value={search}
+            onChangeText={setSearch}
+            returnKeyType="search"
+            testID="assets-search"
+          />
+          {search.length > 0 ? (
+            <TouchableOpacity onPress={() => setSearch('')} hitSlop={8}>
+              <Ionicons name="close-circle" size={18} color={colors.textSecondary as string} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
+  searchHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    paddingHorizontal: Spacing.three,
+    paddingBottom: Spacing.two,
+    alignItems: 'center',
+  },
+  searchBar: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 40,
+    borderRadius: 20,
+    borderCurve: 'continuous',
+    paddingHorizontal: 12,
+  },
+  searchIcon: { marginRight: 8 },
+  searchInput: { flex: 1, fontSize: 16, height: '100%' },
+  column: { gap: Spacing.three, paddingHorizontal: Spacing.three },
   tile: { flex: 1 },
   tileSurface: { borderRadius: 20, borderCurve: 'continuous', borderWidth: 1, padding: Spacing.two, gap: Spacing.two },
   image: { width: '100%', aspectRatio: 1, borderRadius: 14 },
