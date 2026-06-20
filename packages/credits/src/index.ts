@@ -166,3 +166,27 @@ export async function initializeUserCredits(admin: AdminClient, userId: string):
   }
   return true;
 }
+
+/**
+ * Idempotently ensure a user has their starter credits. Only grants them when
+ * the account was never initialized (no reset date, zero balances) — safe to
+ * call on every sign-in. This guarantees parity with the web signup flow even
+ * if the DB trigger migration hasn't been applied.
+ */
+export async function ensureUserCredits(admin: AdminClient, userId: string): Promise<boolean> {
+  const { data, error } = await admin
+    .from('users')
+    .select('subscription_credits, purchased_credits, last_credits_reset_date')
+    .eq('id', userId)
+    .single();
+
+  if (error || !data) return false;
+
+  const neverInitialized =
+    data.last_credits_reset_date == null &&
+    (data.subscription_credits ?? 0) === 0 &&
+    (data.purchased_credits ?? 0) === 0;
+
+  if (!neverInitialized) return false;
+  return initializeUserCredits(admin, userId);
+}

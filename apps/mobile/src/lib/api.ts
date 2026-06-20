@@ -69,6 +69,13 @@ export const api = {
   openPortal: () =>
     authedFetch<{ url: string }>('/api/mobile/portal', { method: 'POST', body: '{}' }),
 
+  /** Idempotently grant starter credits to a freshly-created account. */
+  ensureCredits: () =>
+    authedFetch<{ granted: boolean; subscriptionCredits: number; purchasedCredits: number; total: number }>(
+      '/api/mobile/ensure-credits',
+      { method: 'POST', body: '{}' },
+    ),
+
   deleteMedia: (mediaId: string) =>
     authedFetch<{ success: boolean; error?: string }>(`/api/mobile/media/${mediaId}`, {
       method: 'DELETE',

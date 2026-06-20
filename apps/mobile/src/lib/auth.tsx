@@ -1,6 +1,14 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { api } from './api';
+
+/** Fire-and-forget grant of starter credits for freshly-created accounts. */
+function ensureCreditsForSession(session: Session | null) {
+  if (session?.user) {
+    void api.ensureCredits().catch(() => undefined);
+  }
+}
 
 interface AuthState {
   session: Session | null;
@@ -21,9 +29,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
+      ensureCreditsForSession(data.session);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       setSession(next);
+      if (event === 'SIGNED_IN') ensureCreditsForSession(next);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
