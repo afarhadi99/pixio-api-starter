@@ -35,7 +35,7 @@ For local Pixio webhooks, expose the web app with [ngrok](https://ngrok.com/) an
 
 ## Scripts
 
-```bash
+    ```bash
 pnpm dev              # web + mobile in parallel
 pnpm dev:web          # Next.js only
 pnpm dev:mobile       # Expo only
@@ -46,13 +46,21 @@ pnpm build            # production build
 
 ## Mobile app
 
+**Uses a development build — not Expo Go.** Native Stripe and SDK 56 require `expo-dev-client`.
+
 ```bash
-cp apps/mobile/.env.example apps/mobile/.env.local
+cp apps/mobile/.env.example apps/mobile/.env.local   # set EXPO_PUBLIC_API_URL to LAN IP
+pnpm install
 pnpm --filter @pixio/mobile prebuild
-pnpm --filter @pixio/mobile ios   # or android
+pnpm --filter @pixio/mobile android   # or ios — builds & installs dev client
 ```
 
-Details: [apps/mobile/README.md](./apps/mobile/README.md)
+Day-to-day: `pnpm dev:mobile` (Metro with `--dev-client`), then press `a` / `i`.
+
+| Topic | Doc |
+|-------|-----|
+| Full mobile guide (icons, Metro, troubleshooting) | [apps/mobile/README.md](./apps/mobile/README.md) |
+| Web library + result preview / Realtime | [docs/web-dashboard-realtime.md](./docs/web-dashboard-realtime.md) |
 
 ## Architecture
 
@@ -86,7 +94,9 @@ sequenceDiagram
 
 - [Pixio API](https://pixio-api-docs.vercel.app/docs/api)
 - [AGENTS.md](./AGENTS.md) — monorepo rules for contributors and AI agents
-- Full web setup guide: sections in this repo's historical README content apply to `apps/web`
+- [apps/mobile/README.md](./apps/mobile/README.md) — Expo dev build, icons, Metro/Supabase, troubleshooting
+- [docs/web-dashboard-realtime.md](./docs/web-dashboard-realtime.md) — web library & result preview sync
+- Full web setup: `apps/web/env.example` and historical README sections for `apps/web`
 
 ## Deploy
 

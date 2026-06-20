@@ -35,15 +35,31 @@ pnpm typecheck          # all packages + apps
 pnpm test               # unit tests (Vitest + Jest)
 pnpm build              # production build (web)
 pnpm dev:web            # Next.js on :3000
-pnpm dev:mobile         # Expo dev server
+pnpm dev:mobile         # Expo Metro (--dev-client, not Expo Go)
 pnpm --filter @pixio/web supabase:start   # local Supabase
 ```
+
+### Mobile dev build (required)
+
+Mobile does **not** run in Expo Go. Use a development build:
+
+```bash
+pnpm --filter @pixio/mobile prebuild
+pnpm --filter @pixio/mobile android   # or ios
+```
+
+See **[apps/mobile/README.md](./apps/mobile/README.md)** for icons, Metro/Supabase shims, and troubleshooting.
 
 ## Environment
 
 - **Web**: copy `apps/web/env.example` → `apps/web/.env.local`
 - **Mobile**: copy `apps/mobile/.env.example` → `apps/mobile/.env.local`
 - Required: Supabase URL/keys, Stripe keys + price IDs, Pixio deployment IDs, `NEXT_PUBLIC_SITE_URL` (ngrok for local webhooks)
+- Mobile `EXPO_PUBLIC_API_URL` must be reachable from the device (LAN IP, not `localhost`)
+
+## Web dashboard Realtime & preview
+
+Generation UI uses Realtime + polling + custom events. Required Supabase migrations and preview-panel behavior are documented in **[docs/web-dashboard-realtime.md](./docs/web-dashboard-realtime.md)**.
 
 ## Testing expectations
 
@@ -58,10 +74,13 @@ Run `pnpm test` before handing off. Do not commit `.next/`, `node_modules/`, or 
 
 ## UI conventions (mobile)
 
-- **iOS**: liquid glass via `expo-glass-effect` (`Surface` component)
+- **iOS**: liquid glass via `expo-glass-effect` (`Surface` component) — dependency only, **never** an Expo config plugin
 - **Android**: Material elevation surfaces + ripple on buttons
 - Three tabs only: Generate (home), Assets, Settings
 - Asset detail actions: view, regenerate, download, share, delete
+- **Dev client only**: `expo-dev-client` in `app.json` plugins; scripts use `--dev-client` / `expo run:android`
+- **Metro**: Node modules (`ws`, `stream`, …) stubbed in `apps/mobile/metro.config.js` for Supabase on React Native
+- **Icons**: Pixio-parity assets under `apps/mobile/assets/images/` (adaptive Android + monochrome layer)
 
 ## PR / commit checklist
 
@@ -74,5 +93,6 @@ Run `pnpm test` before handing off. Do not commit `.next/`, `node_modules/`, or 
 ## Docs
 
 - Public setup: root `README.md`
-- Mobile: `apps/mobile/README.md`
+- Mobile (dev build, icons, Metro, troubleshooting): `apps/mobile/README.md`
+- Web dashboard Realtime & preview: `docs/web-dashboard-realtime.md`
 - Pixio API: https://pixio-api-docs.vercel.app/docs/api

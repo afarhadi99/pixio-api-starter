@@ -1,6 +1,12 @@
+// settings-colors imports `Color` from expo-router for Android dynamic colors;
+// stub it so jest doesn't load the full (untranspiled) router module.
+jest.mock('expo-router', () => ({
+  Color: { android: { dynamic: new Proxy({}, { get: () => '#000000' }) } },
+}));
+
 import React from 'react';
 import { render, fireEvent, screen } from '@testing-library/react-native';
-import { Button } from './ui';
+import { Button } from './primitives';
 
 describe('Button', () => {
   it('renders its title', () => {

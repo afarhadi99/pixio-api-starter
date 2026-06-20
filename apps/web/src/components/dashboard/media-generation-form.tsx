@@ -128,6 +128,9 @@ export function MediaGenerationForm({
   const [currentMediaId, setCurrentMediaId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewStatus, setPreviewStatus] = useState<MediaStatus | 'idle'>('idle');
+  // Media type of the item currently shown in the preview (may differ from the
+  // active form mode, e.g. when showing the last generation on load).
+  const [previewMediaType, setPreviewMediaType] = useState<MediaType | null>(null);
   const startFileInputRef = useRef<HTMLInputElement>(null);
   const endFileInputRef = useRef<HTMLInputElement>(null);
   const image1FileInputRef = useRef<HTMLInputElement>(null);
@@ -156,52 +159,80 @@ export function MediaGenerationForm({
   };
   const generatedMediaType: MediaType = getMediaType();
 
-  // Realtime subscription for media status updates
-  useEffect(() => {
-    if (!currentMediaId) return;
+  // Keep a ref to the previewed media id so realtime callbacks (registered once)
+  // always compare against the latest value without re-subscribing.
+  const currentMediaIdRef = useRef<string | null>(null);
+  useEffect(() => { currentMediaIdRef.current = currentMediaId; }, [currentMediaId]);
 
-    console.log(`[MediaGenerationForm] Setting up Realtime for media: ${currentMediaId}`);
-    
+  // On load, surface the user's most recent generation (completed or in-flight)
+  // so the preview isn't empty and reflects the latest work.
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('generated_media')
+        .select('id, status, media_url, media_type')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      // Don't clobber a generation the user just kicked off this session.
+      if (cancelled || error || !data || currentMediaIdRef.current) return;
+      setCurrentMediaId(data.id);
+      setPreviewMediaType(data.media_type as MediaType);
+      setPreviewStatus(data.status as MediaStatus);
+      if (data.status === 'completed' && data.media_url) {
+        setPreviewUrl(data.media_url);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId, supabase]);
+
+  // Realtime: track this user's generations — a new in-flight row becomes the
+  // active preview, and status changes on the previewed row update it live.
+  useEffect(() => {
+    if (!userId) return;
+
     const channel = supabase
-      .channel(`generation-${currentMediaId}`)
+      .channel(`user-generations-${userId}`)
       .on(
         'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'generated_media',
-          filter: `id=eq.${currentMediaId}`
-        },
+        { event: 'INSERT', schema: 'public', table: 'generated_media', filter: `user_id=eq.${userId}` },
         (payload) => {
-          console.log('[MediaGenerationForm] Realtime update:', payload);
-          const updated = payload.new as any;
-          
-          setPreviewStatus(updated.status);
-
-          if (updated.status === 'completed') {
-            setPreviewUrl(updated.media_url);
-            toast.success(`${generatedMediaType} generation complete!`);
-          } else if (updated.status === 'failed') {
-            const errorMsg = updated.metadata?.error || 'Generation failed';
-            toast.error(`Generation failed: ${errorMsg}`);
+          const row = payload.new as any;
+          setCurrentMediaId(row.id);
+          setPreviewMediaType(row.media_type as MediaType);
+          setPreviewStatus((row.status as MediaStatus) || 'pending');
+          setPreviewUrl(row.media_url || null);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'generated_media', filter: `user_id=eq.${userId}` },
+        (payload) => {
+          const row = payload.new as any;
+          if (row.id !== currentMediaIdRef.current) return;
+          setPreviewStatus(row.status as MediaStatus);
+          if (row.status === 'completed' && row.media_url) {
+            setPreviewUrl(row.media_url);
+            setPreviewMediaType(row.media_type as MediaType);
+            toast.success(`${row.media_type === 'video' ? 'Video' : 'Image'} generation complete!`);
+          } else if (row.status === 'failed') {
+            toast.error(`Generation failed: ${row.metadata?.error || 'Unknown error'}`);
           }
         }
       )
       .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log(`[MediaGenerationForm] Realtime SUBSCRIBED for ${currentMediaId}`);
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('[MediaGenerationForm] Realtime CHANNEL_ERROR');
-          toast.error('Connection error. Please refresh if status doesn\'t update.');
+        if (status === 'CHANNEL_ERROR') {
+          toast.error("Connection error. Please refresh if status doesn't update.");
         }
       });
 
-    // Cleanup on unmount or when currentMediaId changes
     return () => {
-      console.log(`[MediaGenerationForm] Unsubscribing from Realtime for ${currentMediaId}`);
       supabase.removeChannel(channel);
     };
-  }, [currentMediaId, supabase, generatedMediaType]);
+  }, [userId, supabase]);
 
   // --- Image Handling ---
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, type: 'start' | 'end' | 'image1' | 'image2' | 'image3') => {
@@ -240,19 +271,6 @@ export function MediaGenerationForm({
     else if (type === 'image3') { setImage3File(null); setImage3Url(null); setImage3Preview(null); if (image3FileInputRef.current) image3FileInputRef.current.value = ""; }
   };
 
-  // Effect to reset preview if inputs change while generating
-  useEffect(() => {
-    const hasInputs = prompt || startImageFile || endImageFile || startImageUrl || endImageUrl ||
-                      image1File || image1Url || image2File || image2Url || image3File || image3Url ||
-                      positivePrompt || negativePrompt;
-    if (hasInputs && currentMediaId) {
-      console.log("MediaGenerationForm: Inputs changed during generation, resetting preview.");
-      setCurrentMediaId(null);
-      setPreviewStatus('idle');
-      setPreviewUrl(null);
-    }
-  }, [prompt, startImageFile, endImageFile, startImageUrl, endImageUrl, image1File, image1Url, image2File, image2Url, image3File, image3Url, positivePrompt, negativePrompt, currentMediaId]);
-
   // --- Submission Logic ---
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -277,6 +295,7 @@ export function MediaGenerationForm({
     setIsSubmitting(true);
     setPreviewUrl(null);
     setPreviewStatus('pending');
+    setPreviewMediaType(generatedMediaType);
 
     // Clear any existing generation tracking
     setCurrentMediaId(null);
@@ -416,7 +435,10 @@ export function MediaGenerationForm({
     }
   }
 
-  const isLoading = isSubmitting || (currentMediaId !== null && previewStatus === 'processing');
+  const isLoading =
+    isSubmitting || previewStatus === 'pending' || previewStatus === 'processing';
+  // Type of the media currently in the preview (falls back to the active mode).
+  const effectivePreviewType: MediaType = previewMediaType ?? generatedMediaType;
   const isFirstLastMode = generationMode === 'firstLastFrameVideo';
   const isQwenEdit = generationMode === 'video';
   const isKreaFlux = generationMode === 'image';
@@ -585,7 +607,7 @@ export function MediaGenerationForm({
             {/* Completed State */}
             {previewStatus === 'completed' && previewUrl && (
               <motion.div key="completed" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} className="relative w-full h-full">
-                {generatedMediaType === 'video' ? ( <video src={previewUrl} controls className="w-full h-full object-contain rounded-md" preload="metadata" /> ) : ( <Image src={previewUrl} alt={prompt || "Generated Media"} fill className="object-contain rounded-md" unoptimized={true} /> )}
+                {effectivePreviewType === 'video' ? ( <video src={previewUrl} controls className="w-full h-full object-contain rounded-md" preload="metadata" /> ) : ( <Image src={previewUrl} alt={prompt || "Generated Media"} fill className="object-contain rounded-md" unoptimized={true} /> )}
               </motion.div>
             )}
             {/* Failed State */}

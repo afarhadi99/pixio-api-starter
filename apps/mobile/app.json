@@ -4,24 +4,45 @@
     "slug": "pixiolite",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
     "scheme": "pixiolite",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.mytsi.pixiolite"
+      "icon": "./assets/images/icon.png",
+      "bundleIdentifier": "com.mytsi.pixiolite",
+      "infoPlist": {
+        "CFBundleDisplayName": "Pixio Lite"
+      }
     },
     "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png",
+        "backgroundImage": "./assets/images/android-icon-background.png"
+      },
+      "predictiveBackGestureEnabled": false,
       "package": "com.mytsi.pixiolite",
       "edgeToEdgeEnabled": true
     },
     "web": {
       "bundler": "metro",
-      "output": "static"
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "expo-dev-client",
       "expo-router",
       "expo-secure-store",
-      "expo-glass-effect",
+      [
+        "expo-splash-screen",
+        {
+          "android": {
+            "image": "./assets/images/pixio-icon.png",
+            "imageWidth": 76
+          }
+        }
+      ],
       [
         "@stripe/stripe-react-native",
         {
@@ -29,7 +50,8 @@
           "enableGooglePay": true
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true,

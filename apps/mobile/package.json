@@ -4,11 +4,12 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "prebuild": "expo prebuild",
+    "prebuild:clean": "expo prebuild --clean",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "jest --passWithNoTests"
@@ -16,7 +17,7 @@
   "jest": {
     "preset": "jest-expo",
     "transformIgnorePatterns": [
-      "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@stripe/stripe-react-native|expo-glass-effect|@pixio/.*))"
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@stripe/stripe-react-native|expo-glass-effect|@supabase/.*|@pixio/.*))"
     ]
   },
   "dependencies": {
@@ -28,13 +29,22 @@
     "@stripe/stripe-react-native": "0.64.0",
     "@supabase/supabase-js": "catalog:",
     "expo": "^56.0.0",
+    "expo-blur": "~56.0.3",
+    "expo-dev-client": "~56.0.18",
     "expo-file-system": "~56.0.3",
     "expo-glass-effect": "~56.0.4",
+    "expo-haptics": "~56.0.3",
+    "expo-image": "~56.0.11",
+    "expo-image-picker": "~56.0.18",
     "expo-linking": "~56.0.14",
+    "expo-navigation-bar": "~56.0.3",
     "expo-router": "~56.2.11",
     "expo-secure-store": "~56.0.4",
     "expo-sharing": "~56.0.4",
+    "expo-splash-screen": "~56.0.10",
     "expo-status-bar": "~56.0.4",
+    "expo-symbols": "~56.0.6",
+    "lucide-react-native": "^1.21.0",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-native": "0.85.3",

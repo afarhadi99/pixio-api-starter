@@ -1,6 +1,6 @@
 import { Redirect } from 'expo-router';
 import { useAuth } from '@/lib/auth';
-import { Loading } from '@/components/ui';
+import { Loading } from '@/components/primitives';
 
 export default function Index() {
   const { user, loading } = useAuth();

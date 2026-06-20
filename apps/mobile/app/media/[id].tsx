@@ -1,27 +1,25 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Linking,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { GeneratedMedia } from '@pixio/database/types';
-import { Button, Heading, Muted, Screen } from '@/components/ui';
-import { Surface } from '@/components/surface';
+
+import { ScreenShell } from '@/components/screen-shell';
+import { SettingsFrostedView } from '@/components/settings/settings-frosted-view';
+import { useSettingsColors } from '@/components/settings/settings-colors';
+import { ThemedText } from '@/components/themed-text';
+import { Button } from '@/components/primitives';
 import { api } from '@/lib/api';
 import { buildRegenerateParams } from '@/lib/regenerate';
 import { downloadMediaToCache, shareMediaUrl } from '@/lib/media-actions';
 import { supabase } from '@/lib/supabase';
-import { colors, spacing } from '@/lib/theme';
+import { Spacing } from '@/constants/theme';
 
 export default function MediaDetailScreen() {
+  const colors = useSettingsColors();
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [media, setMedia] = useState<GeneratedMedia | null>(null);
@@ -31,11 +29,7 @@ export default function MediaDetailScreen() {
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from('generated_media')
-      .select('*')
-      .eq('id', id)
-      .single();
+    const { data, error } = await supabase.from('generated_media').select('*').eq('id', id).single();
     if (error || !data) {
       Alert.alert('Not found', 'This generation could not be loaded.');
       router.back();
@@ -125,17 +119,27 @@ export default function MediaDetailScreen() {
 
   if (loading || !media) {
     return (
-      <Screen>
-        <ActivityIndicator color={colors.primary} size="large" />
-      </Screen>
+      <ScreenShell>
+        <View style={styles.center}>
+          <ActivityIndicator color={colors.primary} size="large" />
+        </View>
+      </ScreenShell>
     );
   }
 
   const canActOnMedia = media.status === 'completed' && !!media.media_url;
 
   return (
-    <Screen>
-      <ScrollView showsVerticalScrollIndicator={false}>
+    <ScreenShell>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingTop: insets.top + Spacing.three,
+          paddingHorizontal: Spacing.three,
+          paddingBottom: insets.bottom + Spacing.five,
+          gap: Spacing.three,
+        }}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Go back"
@@ -143,71 +147,43 @@ export default function MediaDetailScreen() {
           style={styles.back}
         >
           <Ionicons name="chevron-back" size={24} color={colors.text} />
-          <Text style={styles.backText}>Back</Text>
+          <ThemedText type="default" style={{ color: colors.text }}>
+            Back
+          </ThemedText>
         </Pressable>
 
-        <Heading>{media.status === 'completed' ? 'Your generation' : 'Generation'}</Heading>
-        <Muted numberOfLines={3}>{media.prompt}</Muted>
-        <View style={{ height: spacing.md }} />
+        <ThemedText type="subtitle" style={{ color: colors.text }}>
+          {media.status === 'completed' ? 'Your generation' : 'Generation'}
+        </ThemedText>
+        <ThemedText type="small" numberOfLines={3} style={{ color: colors.textSecondary }}>
+          {media.prompt}
+        </ThemedText>
 
-        <Surface variant="card" style={styles.preview}>
+        <SettingsFrostedView style={[styles.preview, { borderColor: colors.border }]}>
           {canActOnMedia ? (
             <Pressable accessibilityRole="imagebutton" onPress={handleView} testID="media-view">
-              <Image source={{ uri: media.media_url! }} style={styles.image} resizeMode="contain" />
+              <Image source={{ uri: media.media_url }} style={styles.image} contentFit="contain" />
             </Pressable>
           ) : (
-            <View style={[styles.image, styles.placeholder]}>
-              <Text style={styles.status}>{media.status}</Text>
+            <View style={[styles.image, styles.placeholder, { backgroundColor: colors.chip }]}>
+              <ThemedText type="smallBold" style={{ color: colors.textSecondary, textTransform: 'capitalize' }}>
+                {media.status}
+              </ThemedText>
             </View>
           )}
-        </Surface>
+        </SettingsFrostedView>
 
         <View style={styles.actions}>
-          <ActionChip
-            icon="eye-outline"
-            label="View"
-            disabled={!canActOnMedia || !!busy}
-            onPress={handleView}
-            testID="media-action-view"
-          />
-          <ActionChip
-            icon="refresh-outline"
-            label="Regenerate"
-            disabled={!!busy}
-            loading={busy === 'regenerate'}
-            onPress={handleRegenerate}
-            testID="media-action-regenerate"
-          />
-          <ActionChip
-            icon="download-outline"
-            label="Download"
-            disabled={!canActOnMedia || !!busy}
-            loading={busy === 'download'}
-            onPress={handleDownload}
-            testID="media-action-download"
-          />
-          <ActionChip
-            icon="share-outline"
-            label="Share"
-            disabled={!canActOnMedia || !!busy}
-            loading={busy === 'share'}
-            onPress={handleShare}
-            testID="media-action-share"
-          />
-          <ActionChip
-            icon="trash-outline"
-            label="Delete"
-            disabled={!!busy}
-            loading={busy === 'delete'}
-            onPress={handleDelete}
-            testID="media-action-delete"
-            danger
-          />
+          <ActionChip icon="eye-outline" label="View" disabled={!canActOnMedia || !!busy} onPress={handleView} testID="media-action-view" />
+          <ActionChip icon="refresh-outline" label="Regenerate" disabled={!!busy} loading={busy === 'regenerate'} onPress={handleRegenerate} testID="media-action-regenerate" />
+          <ActionChip icon="download-outline" label="Download" disabled={!canActOnMedia || !!busy} loading={busy === 'download'} onPress={handleDownload} testID="media-action-download" />
+          <ActionChip icon="share-outline" label="Share" disabled={!canActOnMedia || !!busy} loading={busy === 'share'} onPress={handleShare} testID="media-action-share" />
+          <ActionChip icon="trash-outline" label="Delete" disabled={!!busy} loading={busy === 'delete'} onPress={handleDelete} testID="media-action-delete" danger />
         </View>
 
         <Button title="Close" variant="ghost" onPress={() => router.back()} />
       </ScrollView>
-    </Screen>
+    </ScreenShell>
   );
 }
 
@@ -228,6 +204,8 @@ function ActionChip({
   testID?: string;
   danger?: boolean;
 }) {
+  const colors = useSettingsColors();
+  const tint = danger ? colors.negative : colors.primary;
   return (
     <Pressable
       testID={testID}
@@ -235,41 +213,37 @@ function ActionChip({
       accessibilityLabel={label}
       disabled={disabled || loading}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.chip,
-        pressed && styles.chipPressed,
-        (disabled || loading) && styles.chipDisabled,
-      ]}
+      style={({ pressed }) => [styles.chip, (pressed || disabled || loading) && { opacity: 0.55 }]}
     >
-      <Surface variant="pill" style={styles.chipInner}>
+      <SettingsFrostedView style={[styles.chipInner, { borderColor: colors.border }]}>
         {loading ? (
-          <ActivityIndicator color={danger ? colors.danger : colors.primary} size="small" />
+          <ActivityIndicator color={tint} size="small" />
         ) : (
-          <Ionicons name={icon} size={20} color={danger ? colors.danger : colors.primary} />
+          <Ionicons name={icon} size={20} color={tint} />
         )}
-        <Text style={[styles.chipLabel, danger && { color: colors.danger }]}>{label}</Text>
-      </Surface>
+        <ThemedText type="small" style={{ color: danger ? colors.negative : colors.text }}>
+          {label}
+        </ThemedText>
+      </SettingsFrostedView>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  back: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
-  backText: { color: colors.text, fontSize: 16, marginLeft: 4 },
-  preview: { padding: spacing.sm, marginBottom: spacing.md },
-  image: { width: '100%', aspectRatio: 1, borderRadius: 8 },
-  placeholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card },
-  status: { color: colors.textMuted, fontWeight: '700', textTransform: 'capitalize' },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg },
-  chip: { width: '30%', minWidth: 96 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  back: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  preview: { borderRadius: 24, borderCurve: 'continuous', borderWidth: 1, padding: Spacing.two, overflow: 'hidden' },
+  image: { width: '100%', aspectRatio: 1, borderRadius: 16 },
+  placeholder: { alignItems: 'center', justifyContent: 'center' },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  chip: { width: '31%', minWidth: 96 },
   chipInner: {
+    borderRadius: 16,
+    borderCurve: 'continuous',
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    gap: spacing.xs,
+    paddingVertical: Spacing.two,
+    gap: Spacing.one,
   },
-  chipLabel: { color: colors.text, fontSize: 12, fontWeight: '600' },
-  chipPressed: { opacity: 0.85 },
-  chipDisabled: { opacity: 0.45 },
 });

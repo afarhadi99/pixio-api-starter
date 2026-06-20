@@ -48,6 +48,8 @@ function mergeMediaRow(current: GeneratedMedia[], row: GeneratedMedia): Generate
   return sortMedia(next);
 }
 
+const IN_FLIGHT_POLL_MS = 3000;
+
 export function MediaLibrary({ initialMedia = [] }: MediaLibraryProps) {
   const [media, setMedia] = useState<GeneratedMedia[]>(initialMedia);
   const [activeTab, setActiveTab] = useState<'all' | MediaType>('all');
@@ -75,11 +77,11 @@ export function MediaLibrary({ initialMedia = [] }: MediaLibraryProps) {
     }
 
     setMedia((current) => {
-      const merged = [...current];
+      let merged = current;
       for (const row of data ?? []) {
-        if (!merged.some((item) => item.id === row.id)) merged.push(row);
+        merged = mergeMediaRow(merged, row);
       }
-      return sortMedia(merged);
+      return merged;
     });
   }, [supabase, userId]);
 

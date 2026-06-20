@@ -7,6 +7,7 @@ export default [
       'dist/*',
       '.expo/*',
       'node_modules/*',
+      'shims/*',
       'babel.config.js',
       'metro.config.js',
       '*.config.js',
