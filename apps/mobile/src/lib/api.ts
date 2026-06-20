@@ -7,6 +7,9 @@ import { ENV } from './env';
  * server can resolve the user via `getRequestUser`.
  */
 async function authedFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  if (!ENV.apiUrl) {
+    throw new Error('EXPO_PUBLIC_API_URL is not configured');
+  }
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -38,15 +41,17 @@ export interface NativePaymentParams {
 }
 
 export const api = {
-  getConfig: () =>
-    fetch(`${ENV.apiUrl}/api/mobile/config`).then(
+  getConfig: () => {
+    if (!ENV.apiUrl) return Promise.reject(new Error('EXPO_PUBLIC_API_URL is not configured'));
+    return fetch(`${ENV.apiUrl}/api/mobile/config`).then(
       (r) =>
         r.json() as Promise<{
           tiers: import('@pixio/config').PricingTier[];
           creditPacks: import('@pixio/config').CreditPack[];
           publishableKey: string;
         }>,
-    ),
+    );
+  },
 
   generate: (params: GenerateParams) =>
     authedFetch<{ success: boolean; mediaId?: string; error?: string }>('/api/mobile/generate', {

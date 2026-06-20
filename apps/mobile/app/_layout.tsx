@@ -1,3 +1,4 @@
+import React from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -8,15 +9,29 @@ import { AuthProvider } from '@/lib/auth';
 import { ENV } from '@/lib/env';
 import { IosGlassHostProvider } from '@/components/ui/ios-glass-host-context';
 
+/**
+ * Only mount StripeProvider when a publishable key is configured. Initializing
+ * the native Stripe module with an empty key can crash on launch, and native
+ * payments are optional (billing also works on the web).
+ */
+function MaybeStripeProvider({ children }: { children: React.ReactNode }) {
+  if (!ENV.stripePublishableKey) return <>{children}</>;
+  return (
+    <StripeProvider
+      publishableKey={ENV.stripePublishableKey}
+      merchantIdentifier="merchant.com.mytsi.pixiolite"
+    >
+      {children as React.ReactElement}
+    </StripeProvider>
+  );
+}
+
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <IosGlassHostProvider>
-          <StripeProvider
-            publishableKey={ENV.stripePublishableKey}
-            merchantIdentifier="merchant.com.mytsi.pixiolite"
-          >
+          <MaybeStripeProvider>
             <AuthProvider>
               <StatusBar style="auto" />
               <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
@@ -26,7 +41,7 @@ export default function RootLayout() {
                 <Stack.Screen name="media/[id]" options={{ presentation: 'modal' }} />
               </Stack>
             </AuthProvider>
-          </StripeProvider>
+          </MaybeStripeProvider>
         </IosGlassHostProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
