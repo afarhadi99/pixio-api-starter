@@ -55,8 +55,17 @@ export default function GenerateScreen() {
   const [prompt, setPrompt] = useState('');
   const [negative, setNegative] = useState('');
   const [image1, setImage1] = useState<string | null>(null);
+  const [image2, setImage2] = useState<string | null>(null);
+  const [image3, setImage3] = useState<string | null>(null);
   const [startImg, setStartImg] = useState<string | null>(null);
   const [endImg, setEndImg] = useState<string | null>(null);
+  // Krea Flux dimensions
+  const [width, setWidth] = useState('1024');
+  const [height, setHeight] = useState('1024');
+  // Wan 2.2 video dimensions
+  const [vWidth, setVWidth] = useState('512');
+  const [vHeight, setVHeight] = useState('512');
+  const [vLength, setVLength] = useState('81');
   const [submitting, setSubmitting] = useState(false);
   const [modelPickerVisible, setModelPickerVisible] = useState(false);
   const [optionsVisible, setOptionsVisible] = useState(false);
@@ -94,22 +103,48 @@ export default function GenerateScreen() {
     try {
       let params: GenerateParams;
       if (selectedId === 'krea-flux') {
-        params = { mode: 'image', prompt, width: 1024, height: 1024 };
+        params = {
+          mode: 'image',
+          prompt,
+          width: parseInt(width, 10) || 1024,
+          height: parseInt(height, 10) || 1024,
+        };
       } else if (selectedId === 'qwen-edit') {
-        const url = await uploadInputImage(user.id, image1!, 'image1');
-        params = { mode: 'video', image1Url: url, positivePrompt: prompt, negativePrompt: negative };
+        const [url1, url2, url3] = await Promise.all([
+          uploadInputImage(user.id, image1!, 'image1'),
+          image2 ? uploadInputImage(user.id, image2, 'image1') : Promise.resolve(null),
+          image3 ? uploadInputImage(user.id, image3, 'image1') : Promise.resolve(null),
+        ]);
+        params = {
+          mode: 'video',
+          image1Url: url1,
+          image2Url: url2,
+          image3Url: url3,
+          positivePrompt: prompt,
+          negativePrompt: negative,
+        };
       } else {
         const [s, e] = await Promise.all([
           uploadInputImage(user.id, startImg!, 'start'),
           uploadInputImage(user.id, endImg!, 'end'),
         ]);
-        params = { mode: 'firstLastFrameVideo', prompt, startImageUrl: s, endImageUrl: e };
+        params = {
+          mode: 'firstLastFrameVideo',
+          prompt,
+          startImageUrl: s,
+          endImageUrl: e,
+          videoWidth: parseInt(vWidth, 10) || 512,
+          videoHeight: parseInt(vHeight, 10) || 512,
+          videoLength: parseInt(vLength, 10) || 81,
+        };
       }
       const res = await api.generate(params);
       if (res.success) {
         setPrompt('');
         setNegative('');
         setImage1(null);
+        setImage2(null);
+        setImage3(null);
         setStartImg(null);
         setEndImg(null);
         refreshCredits();
@@ -228,20 +263,29 @@ export default function GenerateScreen() {
 
       <BottomSheet visible={optionsVisible} title={`${model.name} options`} onClose={() => setOptionsVisible(false)}>
         {selectedId === 'krea-flux' ? (
-          <ThemedText type="small" style={{ color: colors.textSecondary }}>
-            Krea Flux generates from your prompt — no extra inputs needed.
-          </ThemedText>
+          <View style={styles.numberRow}>
+            <LabeledNumber label="Width" value={width} onChangeText={setWidth} />
+            <LabeledNumber label="Height" value={height} onChangeText={setHeight} />
+          </View>
         ) : null}
         {selectedId === 'qwen-edit' ? (
           <>
-            <ImagePickerRow label="Image to edit" uri={image1} onPick={() => pickImage(setImage1)} onClear={() => setImage1(null)} />
-            <FrostedField placeholder="Negative prompt (optional)…" value={negative} onChangeText={setNegative} />
+            <ImagePickerRow label="Primary image" uri={image1} onPick={() => pickImage(setImage1)} onClear={() => setImage1(null)} />
+            <ImagePickerRow label="Reference image 2 (optional)" uri={image2} onPick={() => pickImage(setImage2)} onClear={() => setImage2(null)} />
+            <ImagePickerRow label="Reference image 3 (optional)" uri={image3} onPick={() => pickImage(setImage3)} onClear={() => setImage3(null)} />
+            <FieldLabel>Negative prompt (optional)</FieldLabel>
+            <FrostedField placeholder="What to avoid…" value={negative} onChangeText={setNegative} />
           </>
         ) : null}
         {selectedId === 'wan-first-last-frame' ? (
           <>
             <ImagePickerRow label="Start frame" uri={startImg} onPick={() => pickImage(setStartImg)} onClear={() => setStartImg(null)} />
             <ImagePickerRow label="End frame" uri={endImg} onPick={() => pickImage(setEndImg)} onClear={() => setEndImg(null)} />
+            <View style={styles.numberRow}>
+              <LabeledNumber label="Width" value={vWidth} onChangeText={setVWidth} />
+              <LabeledNumber label="Height" value={vHeight} onChangeText={setVHeight} />
+              <LabeledNumber label="Frames" value={vLength} onChangeText={setVLength} />
+            </View>
           </>
         ) : null}
       </BottomSheet>
@@ -344,6 +388,41 @@ function FrostedField(props: React.ComponentProps<typeof TextInput>) {
   );
 }
 
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  const colors = useSettingsColors();
+  return (
+    <ThemedText type="smallBold" style={{ color: colors.text }}>
+      {children}
+    </ThemedText>
+  );
+}
+
+function LabeledNumber({
+  label,
+  value,
+  onChangeText,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (v: string) => void;
+}) {
+  const colors = useSettingsColors();
+  return (
+    <View style={{ flex: 1, gap: Spacing.one }}>
+      <FieldLabel>{label}</FieldLabel>
+      <TextInput
+        value={value}
+        onChangeText={(t) => onChangeText(t.replace(/[^0-9]/g, ''))}
+        keyboardType="number-pad"
+        style={[
+          styles.field,
+          { backgroundColor: colors.chip, borderColor: colors.border, color: colors.text as string, minHeight: 48 },
+        ]}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   composer: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20, paddingHorizontal: Spacing.three },
   promptBar: {
@@ -383,6 +462,7 @@ const styles = StyleSheet.create({
   tileSurface: { borderRadius: 18, borderCurve: 'continuous', borderWidth: 1, padding: Spacing.two },
   tileImage: { width: '100%', aspectRatio: 1, borderRadius: 12 },
   tilePlaceholder: { alignItems: 'center', justifyContent: 'center' },
+  numberRow: { flexDirection: 'row', gap: Spacing.two },
   pickerRow: { flexDirection: 'row', gap: Spacing.three, alignItems: 'center' },
   pickerThumb: { width: 64, height: 64, borderRadius: 14 },
   pickerThumbEmpty: { alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
