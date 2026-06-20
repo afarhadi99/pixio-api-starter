@@ -1,4 +1,3 @@
-import { BlurTargetView } from 'expo-blur';
 import React, { useCallback, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -26,16 +25,11 @@ export function AppScreenShell(props: { children: React.ReactNode }) {
 
   return (
     <SettingsEffectsProvider blurTargetRef={blurTargetRef}>
-      <BlurTargetView
-        ref={blurTargetRef}
-        collapsable={false}
-        onLayout={handleBlurTargetLayout}
-        style={styles.shell}
-      >
+      <View ref={blurTargetRef} collapsable={false} onLayout={handleBlurTargetLayout} style={styles.shell}>
         <GlassFocusRefresh />
         {props.children}
         <AppBottomMenu />
-      </BlurTargetView>
+      </View>
     </SettingsEffectsProvider>
   );
 }

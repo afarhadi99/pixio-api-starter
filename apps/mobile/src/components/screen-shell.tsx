@@ -1,4 +1,3 @@
-import { BlurTargetView } from 'expo-blur';
 import React, { useCallback, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -29,7 +28,7 @@ export function ScreenShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SettingsEffectsProvider blurTargetRef={blurTargetRef}>
-      <BlurTargetView
+      <View
         ref={blurTargetRef}
         collapsable={false}
         onLayout={handleLayout}
@@ -37,7 +36,7 @@ export function ScreenShell({ children }: { children: React.ReactNode }) {
       >
         <SettingsAnimatedBackground />
         {children}
-      </BlurTargetView>
+      </View>
     </SettingsEffectsProvider>
   );
 }

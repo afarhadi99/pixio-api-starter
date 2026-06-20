@@ -1,11 +1,9 @@
-import { BlurView } from 'expo-blur';
 import React from 'react';
-import { Platform, useColorScheme, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { IosGlassSurface } from '@/components/ui/ios-glass-surface';
 
 import { useSettingsColors } from './settings-colors';
-import { useSettingsEffects } from './settings-effects-context';
 import { settingsFrostedViewStyles } from './settings-frosted-view.styles';
 
 type SettingsFrostedViewProps = {
@@ -14,19 +12,22 @@ type SettingsFrostedViewProps = {
   intensity?: number;
 };
 
+/**
+ * Frosted surface. On iOS this uses the native liquid-glass effect. On Android
+ * we render a translucent solid surface instead of expo-blur's BlurView:
+ * live blur with a blurTarget capture renders on the GPU RenderThread and was
+ * causing a native SIGSEGV crash. A translucent fill over the animated
+ * background keeps the glassy look without the unstable GPU path.
+ */
 export function SettingsFrostedView(props: SettingsFrostedViewProps) {
-  const { children, style, intensity } = props;
+  const { children, style } = props;
   const colors = useSettingsColors();
-  const { blurTargetRef } = useSettingsEffects();
-  const scheme = useColorScheme();
-  const resolvedIntensity = intensity ?? colors.frostedIntensity;
 
   if (Platform.OS === 'ios') {
     return (
       <IosGlassSurface
         glassEffectStyle="regular"
         glassAnimate={false}
-        colorScheme={scheme === 'dark' ? 'dark' : 'light'}
         fallbackBackgroundColor={colors.surface}
         style={[settingsFrostedViewStyles.container, style]}
       >
@@ -36,15 +37,10 @@ export function SettingsFrostedView(props: SettingsFrostedViewProps) {
   }
 
   return (
-    <BlurView
-      blurTarget={blurTargetRef ?? undefined}
-      intensity={resolvedIntensity}
-      tint={colors.blurTint}
-      blurMethod="dimezisBlurViewSdk31Plus"
-      blurReductionFactor={2}
+    <View
       style={[settingsFrostedViewStyles.container, { backgroundColor: colors.blurFallback }, style]}
     >
       {children}
-    </BlurView>
+    </View>
   );
 }
