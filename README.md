@@ -44,6 +44,8 @@ Open [http://localhost:3000](http://localhost:3000).
 
 For local Pixio webhooks, expose the web app with [ngrok](https://ngrok.com/) and set `NEXT_PUBLIC_SITE_URL` to your tunnel URL. Point Pixio deployment webhooks to `{SITE_URL}/api/webhooks/pixio`.
 
+Pull requests that change SQL under `apps/web/supabase/migrations` run [RattleCheck](.github/workflows/rattlecheck.yml). It compares permissions with the base branch and points to the SQL line for new high or critical findings. The check uses no database credentials.
+
 ## Scripts
 
     ```bash
